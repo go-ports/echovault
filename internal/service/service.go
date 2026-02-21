@@ -520,6 +520,80 @@ func (s *Service) Delete(memoryID string) (bool, error) {
 	return s.database.DeleteMemory(memoryID)
 }
 
+// DeleteByFilter removes all memories older than olderThanDays, optionally
+// filtered by project and/or category. Returns the number of deleted records.
+func (s *Service) DeleteByFilter(project, category string, olderThanDays int) (int, error) {
+	before := time.Now().UTC().AddDate(0, 0, -olderThanDays)
+	return s.database.DeleteByFilter(project, category, before)
+}
+
+// reembedMemory re-generates and stores the embedding for an existing memory
+// identified by id. All errors are logged as warnings and do not block the caller.
+func (s *Service) reembedMemory(ctx context.Context, id, embedText string) {
+	ep, err := s.embeddingProvider(ctx)
+	if err != nil || ep == nil {
+		return
+	}
+	embedding, err := ep.Embed(ctx, embedText)
+	if err != nil {
+		slog.Warn("reembedMemory: embedding failed", "err", err)
+		return
+	}
+	if !s.ensureVectors(embedding) {
+		return
+	}
+	mem, found, err := s.database.GetMemory(id)
+	if err != nil || !found {
+		return
+	}
+	rowid, ok := mem["rowid"].(int64)
+	if !ok {
+		return
+	}
+	if err := s.database.InsertVector(rowid, embedding); err != nil {
+		slog.Warn("reembedMemory: insert vector", "err", err)
+	}
+}
+
+// Replace fully overwrites an existing memory's content and re-embeds it.
+// Returns a SaveResult with action "replaced", or an error if not found.
+func (s *Service) Replace(ctx context.Context, id string, raw *models.RawMemoryInput) (*models.SaveResult, error) {
+	// Redact all text fields.
+	patterns := s.getIgnorePatterns()
+	raw.Title = redaction.Redact(raw.Title, patterns)
+	raw.What = redaction.Redact(raw.What, patterns)
+	if raw.Why != "" {
+		raw.Why = redaction.Redact(raw.Why, patterns)
+	}
+	if raw.Impact != "" {
+		raw.Impact = redaction.Redact(raw.Impact, patterns)
+	}
+	if raw.Details != "" {
+		raw.Details = redaction.Redact(raw.Details, patterns)
+	}
+
+	found, err := s.database.ReplaceMemory(
+		id, raw.Title, raw.What, raw.Why, raw.Impact,
+		raw.Tags, raw.RelatedFiles, raw.Category, raw.Details,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("Replace: %w", err)
+	}
+	if !found {
+		return nil, fmt.Errorf("Replace: memory %q not found", id)
+	}
+
+	// Re-embed the replaced memory (non-fatal).
+	tagsStr := strings.Join(raw.Tags, " ")
+	embedText := fmt.Sprintf("%s %s %s %s %s", raw.Title, raw.What, raw.Why, raw.Impact, tagsStr)
+	s.reembedMemory(ctx, id, embedText)
+
+	return &models.SaveResult{
+		ID:     id,
+		Action: "replaced",
+	}, nil
+}
+
 // CountMemories returns the total count of memories matching optional filters.
 func (s *Service) CountMemories(project, source string) (int, error) {
 	return s.database.CountMemories(project, source)
