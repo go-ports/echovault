@@ -87,7 +87,11 @@ func newOpenAIMockServer(tb testing.TB) *httptest.Server {
 		var reqBody struct {
 			Input []string `json:"input"`
 		}
-		_ = json.NewDecoder(r.Body).Decode(&reqBody)
+		err := json.NewDecoder(r.Body).Decode(&reqBody)
+		if err != nil {
+			http.Error(w, "invalid request body: "+err.Error(), http.StatusBadRequest)
+			return
+		}
 
 		data := make([]map[string]any, len(reqBody.Input))
 		for i := range reqBody.Input {
