@@ -21,13 +21,13 @@ builds:
       - >-
         {{- if eq .Os "darwin" }}SDKROOT={{ .Env.SDK_PATH }}{{- end }}
       - >-
-        {{- if eq .Os "darwin" }}MACOSX_DEPLOYMENT_TARGET=11.0{{- end }}
+        {{- if eq .Os "darwin" }}MACOSX_DEPLOYMENT_TARGET=13.0{{- end }}
       # darwin: sysroot provides sqlite3.h; cross-compilation targets use the staged header.
       - >-
-        {{- if eq .Os "darwin" }}CGO_CFLAGS=-isysroot {{ .Env.SDK_PATH }} -mmacosx-version-min=11.0 -DSQLITE_ENABLE_FTS5
+        {{- if eq .Os "darwin" }}CGO_CFLAGS=-isysroot {{ .Env.SDK_PATH }} -mmacosx-version-min=13.0 -DSQLITE_ENABLE_FTS5
         {{- else }}CGO_CFLAGS=-I/tmp/sqlite3-cross-include -DSQLITE_ENABLE_FTS5{{- end }}
       - >-
-        {{- if eq .Os "darwin" }}CGO_CXXFLAGS=-isysroot {{ .Env.SDK_PATH }} -mmacosx-version-min=11.0{{- end }}
+        {{- if eq .Os "darwin" }}CGO_CXXFLAGS=-isysroot {{ .Env.SDK_PATH }} -mmacosx-version-min=13.0{{- end }}
       - >-
         {{- if eq .Os "darwin" }}CGO_LDFLAGS=-isysroot {{ .Env.SDK_PATH }}{{- end }}
       # CC: darwin uses native Xcode clang; linux/windows use zig for cross-compilation.

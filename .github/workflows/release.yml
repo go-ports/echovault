@@ -95,6 +95,13 @@ jobs:
           path: dist/echovault_windows_amd64_v1/memory.exe
           retention-days: 1
 
+      - name: Stage windows/arm64 binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: memory-windows-arm64
+          path: dist/echovault_windows_amd64_v1/memory.exe
+          retention-days: 1
+
   # Each job downloads its own platform binary and runs a quick smoke test.
   test-linux-amd64:
     name: Smoke test (linux/amd64)
