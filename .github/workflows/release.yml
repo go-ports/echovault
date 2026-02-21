@@ -1,0 +1,154 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  # Single macOS runner builds all targets via zig cross-compilation.
+  # darwin targets use native Xcode clang; linux and windows use zig.
+  goreleaser:
+    name: Build & Release
+    runs-on: macos-latest
+    env:
+      CGO_ENABLED: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: 1.26.0
+          cache: true
+          cache-dependency-path: go.sum
+
+      - name: Set up Zig
+        uses: mlugg/setup-zig@v2
+        with:
+          version: '0.15.2'
+
+      - name: Set macOS SDK path
+        run: echo "SDK_PATH=$(xcrun --show-sdk-path)" >> "$GITHUB_ENV"
+
+      - name: Run GoReleaser (snapshot — PR)
+        if: github.event_name == 'pull_request'
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: '~> v2'
+          args: release --snapshot --clean --skip=publish
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload snapshot artifacts (PR)
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v6
+        with:
+          name: snapshot
+          path: dist/
+          retention-days: 7
+
+      - name: Run GoReleaser (release — tag)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: '~> v2'
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Smoke test the darwin/arm64 binary natively (runner is arm64).
+      - name: Smoke test (darwin/arm64)
+        run: dist/echovault_darwin_arm64_v8.0/memory --help
+
+      # Stage per-platform binaries so the test jobs below can download them.
+      - name: Stage linux/amd64 binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: memory-linux-amd64
+          path: dist/echovault_linux_amd64_v1/memory
+          retention-days: 1
+
+      - name: Stage linux/arm64 binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: memory-linux-arm64
+          path: dist/echovault_linux_arm64_v8.0/memory
+          retention-days: 1
+
+      - name: Stage windows/amd64 binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: memory-windows-amd64
+          path: dist/echovault_windows_amd64_v1/memory.exe
+          retention-days: 1
+
+      - name: Stage windows/arm64 binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: memory-windows-arm64
+          path: dist/echovault_windows_arm64_v8.0/memory.exe
+          retention-days: 1
+
+  # Each job downloads its own platform binary and runs a quick smoke test.
+  test-linux-amd64:
+    name: Smoke test (linux/amd64)
+    needs: goreleaser
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download linux/amd64 binary
+        uses: actions/download-artifact@v4
+        with:
+          name: memory-linux-amd64
+      - name: Run
+        run: chmod +x memory && ./memory --help
+
+  test-linux-arm64:
+    name: Smoke test (linux/arm64)
+    needs: goreleaser
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - name: Download linux/arm64 binary
+        uses: actions/download-artifact@v4
+        with:
+          name: memory-linux-arm64
+      - name: Run
+        run: chmod +x memory && ./memory --help
+
+  test-windows:
+    name: Smoke test (windows/amd64)
+    needs: goreleaser
+    runs-on: windows-latest
+    steps:
+      - name: Download windows/amd64 binary
+        uses: actions/download-artifact@v4
+        with:
+          name: memory-windows-amd64
+      - name: Run
+        run: .\memory.exe --help
+        shell: pwsh
+
+  test-windows-arm64:
+    name: Smoke test (windows/arm64)
+    needs: goreleaser
+    runs-on: windows-11-arm
+    steps:
+      - name: Download windows/arm64 binary
+        uses: actions/download-artifact@v4
+        with:
+          name: memory-windows-arm64
+      - name: Run
+        run: .\memory.exe --help
+        shell: pwsh

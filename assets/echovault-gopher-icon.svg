@@ -1,0 +1,150 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0c0a1d"/>
+      <stop offset="1" stop-color="#1a1333"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="160" y1="140" x2="352" y2="372" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#a78bfa"/>
+      <stop offset="1" stop-color="#6d28d9"/>
+    </linearGradient>
+    <linearGradient id="ring" x1="180" y1="180" x2="332" y2="332" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#c4b5fd"/>
+      <stop offset="1" stop-color="#7c3aed"/>
+    </linearGradient>
+    <filter id="glow-filter" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="12" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="gopher-shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#a78bfa" flood-opacity="0.5"/>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="512" height="512" rx="96" fill="url(#bg)"/>
+
+  <!-- Subtle grid lines (memory/data feel) -->
+  <g opacity="0.06" stroke="#a78bfa" stroke-width="1">
+    <line x1="128" y1="0" x2="128" y2="512"/>
+    <line x1="256" y1="0" x2="256" y2="512"/>
+    <line x1="384" y1="0" x2="384" y2="512"/>
+    <line x1="0" y1="128" x2="512" y2="128"/>
+    <line x1="0" y1="256" x2="512" y2="256"/>
+    <line x1="0" y1="384" x2="512" y2="384"/>
+  </g>
+
+  <!-- Vault body -->
+  <rect x="136" y="164" width="240" height="200" rx="24" fill="url(#glow)" filter="url(#glow-filter)"/>
+  <rect x="136" y="164" width="240" height="200" rx="24" fill="url(#glow)"/>
+
+  <!-- Vault door inset -->
+  <rect x="160" y="188" width="192" height="152" rx="16" fill="#0c0a1d" opacity="0.6"/>
+
+  <!-- Lock ring -->
+  <circle cx="256" cy="264" r="44" stroke="url(#ring)" stroke-width="6" fill="none"/>
+  <circle cx="256" cy="264" r="32" fill="#0c0a1d"/>
+
+  <!-- Keyhole -->
+  <circle cx="256" cy="258" r="8" fill="#c4b5fd"/>
+  <rect x="252" y="262" width="8" height="18" rx="3" fill="#c4b5fd"/>
+
+  <!-- Memory nodes (floating data points) -->
+  <g filter="url(#glow-filter)">
+    <circle cx="176" cy="218" r="6" fill="#e9d5ff"/>
+    <circle cx="336" cy="218" r="6" fill="#e9d5ff"/>
+    <circle cx="176" cy="310" r="6" fill="#e9d5ff"/>
+    <circle cx="336" cy="310" r="6" fill="#e9d5ff"/>
+  </g>
+
+  <!-- Connection lines from nodes to lock -->
+  <g stroke="#a78bfa" stroke-width="2" opacity="0.4">
+    <line x1="182" y1="222" x2="230" y2="250"/>
+    <line x1="330" y1="222" x2="282" y2="250"/>
+    <line x1="182" y1="306" x2="230" y2="278"/>
+    <line x1="330" y1="306" x2="282" y2="278"/>
+  </g>
+
+  <!-- Echo waves (top) - moved up slightly to make room for gopher -->
+  <g stroke="#a78bfa" stroke-width="2.5" fill="none" opacity="0.3">
+    <path d="M208 140 Q256 120 304 140"/>
+    <path d="M224 124 Q256 108 288 124"/>
+  </g>
+
+  <!-- ===== Go Gopher (bottom-right, peeking over the vault) ===== -->
+  <!-- Positioned at bottom-right corner, scale ~80px tall -->
+  <g transform="translate(342, 318)" filter="url(#gopher-shadow)">
+
+    <!-- Tail -->
+    <ellipse cx="58" cy="70" rx="14" ry="8" fill="#5DC9E2" transform="rotate(-20 58 70)"/>
+
+    <!-- Body -->
+    <ellipse cx="40" cy="68" rx="30" ry="34" fill="#5DC9E2"/>
+
+    <!-- Belly (lighter) -->
+    <ellipse cx="40" cy="72" rx="18" ry="22" fill="#C9EEF5"/>
+
+    <!-- Left arm -->
+    <ellipse cx="14" cy="72" rx="9" ry="6" fill="#5DC9E2" transform="rotate(30 14 72)"/>
+    <!-- Left paw -->
+    <ellipse cx="7" cy="78" rx="6" ry="5" fill="#5DC9E2"/>
+
+    <!-- Right arm -->
+    <ellipse cx="66" cy="72" rx="9" ry="6" fill="#5DC9E2" transform="rotate(-30 66 72)"/>
+    <!-- Right paw -->
+    <ellipse cx="73" cy="78" rx="6" ry="5" fill="#5DC9E2"/>
+
+    <!-- Left leg -->
+    <ellipse cx="26" cy="98" rx="9" ry="7" fill="#5DC9E2"/>
+    <!-- Left foot -->
+    <ellipse cx="22" cy="104" rx="8" ry="5" fill="#5DC9E2"/>
+
+    <!-- Right leg -->
+    <ellipse cx="54" cy="98" rx="9" ry="7" fill="#5DC9E2"/>
+    <!-- Right foot -->
+    <ellipse cx="58" cy="104" rx="8" ry="5" fill="#5DC9E2"/>
+
+    <!-- Head -->
+    <ellipse cx="40" cy="36" rx="26" ry="24" fill="#5DC9E2"/>
+
+    <!-- Head-body connector -->
+    <rect x="20" y="46" width="40" height="10" fill="#5DC9E2"/>
+
+    <!-- Left ear (large gopher ears) -->
+    <ellipse cx="18" cy="18" rx="10" ry="13" fill="#5DC9E2"/>
+    <ellipse cx="18" cy="18" rx="6" ry="9" fill="#F4A6B0"/>
+
+    <!-- Right ear -->
+    <ellipse cx="62" cy="18" rx="10" ry="13" fill="#5DC9E2"/>
+    <ellipse cx="62" cy="18" rx="6" ry="9" fill="#F4A6B0"/>
+
+    <!-- Eyes - white sclera -->
+    <ellipse cx="30" cy="34" rx="9" ry="10" fill="white"/>
+    <ellipse cx="50" cy="34" rx="9" ry="10" fill="white"/>
+
+    <!-- Eyes - pupils -->
+    <circle cx="32" cy="35" r="5" fill="#1a1333"/>
+    <circle cx="52" cy="35" r="5" fill="#1a1333"/>
+
+    <!-- Eye shine -->
+    <circle cx="34" cy="33" r="2" fill="white"/>
+    <circle cx="54" cy="33" r="2" fill="white"/>
+
+    <!-- Nose -->
+    <ellipse cx="40" cy="46" rx="7" ry="5" fill="#C9EEF5"/>
+    <!-- Nostril details -->
+    <ellipse cx="37" cy="46" rx="2.5" ry="2" fill="#5DC9E2"/>
+    <ellipse cx="43" cy="46" rx="2.5" ry="2" fill="#5DC9E2"/>
+
+    <!-- Snout teeth -->
+    <rect x="35" y="50" width="5" height="6" rx="1.5" fill="white"/>
+    <rect x="41" y="50" width="5" height="6" rx="1.5" fill="white"/>
+
+    <!-- Go logo on belly - tiny "Go" text representation as two circles -->
+    <text x="28" y="80" font-family="Arial, sans-serif" font-weight="bold" font-size="11" fill="#00ACD7">Go</text>
+  </g>
+
+</svg>

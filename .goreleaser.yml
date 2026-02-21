@@ -1,0 +1,132 @@
+version: 2
+
+project_name: echovault
+
+before:
+  hooks:
+    # sqlite-vec-go-bindings/cgo sets -DSQLITE_CORE, so sqlite-vec.h uses
+    # #include "sqlite3.h". For zig cross-compilation targets the SDK sysroot
+    # is unavailable; copy sqlite3.h from the macOS SDK to a known path.
+    - sh -c 'mkdir -p /tmp/sqlite3-cross-include && cp "$(xcrun --show-sdk-path)/usr/include/sqlite3.h" /tmp/sqlite3-cross-include/'
+
+builds:
+  - binary: memory
+    main: ./cmd/memory/
+    flags:
+      - -trimpath
+    ldflags: >-
+      -s -w
+      -X github.com/go-ports/echovault/internal/buildinfo.Version={{.Version}}
+      -X github.com/go-ports/echovault/internal/buildinfo.GitCommit={{.ShortCommit}}
+      -X github.com/go-ports/echovault/internal/buildinfo.BuildDate={{.Date}}
+    env:
+      - CGO_ENABLED=1
+      # darwin: export SDKROOT so the linker can find system frameworks.
+      - >-
+        {{- if eq .Os "darwin" }}SDKROOT={{ .Env.SDK_PATH }}{{- end }}
+      - >-
+        {{- if eq .Os "darwin" }}MACOSX_DEPLOYMENT_TARGET=13.0{{- end }}
+      # darwin: sysroot provides sqlite3.h; cross-compilation targets use the staged header.
+      - >-
+        {{- if eq .Os "darwin" }}CGO_CFLAGS=-isysroot {{ .Env.SDK_PATH }} -mmacosx-version-min=13.0 -DSQLITE_ENABLE_FTS5
+        {{- else }}CGO_CFLAGS=-I/tmp/sqlite3-cross-include -DSQLITE_ENABLE_FTS5{{- end }}
+      - >-
+        {{- if eq .Os "darwin" }}CGO_CXXFLAGS=-isysroot {{ .Env.SDK_PATH }} -mmacosx-version-min=13.0{{- end }}
+      - >-
+        {{- if eq .Os "darwin" }}CGO_LDFLAGS=-isysroot {{ .Env.SDK_PATH }}{{- end }}
+      # CC: darwin uses native Xcode clang; linux/windows use zig for cross-compilation.
+      - >-
+        {{- if eq .Os "darwin" }}
+        {{- if eq .Arch "amd64" }}CC=clang -arch x86_64 -isysroot {{ .Env.SDK_PATH }}{{- end }}
+        {{- if eq .Arch "arm64" }}CC=clang -arch arm64 -isysroot {{ .Env.SDK_PATH }}{{- end }}
+        {{- else if eq .Os "linux" }}
+        {{- if eq .Arch "amd64" }}CC=zig cc -target x86_64-linux-gnu -lc -fno-sanitize=all{{- end }}
+        {{- if eq .Arch "arm64" }}CC=zig cc -target aarch64-linux-gnu -lc -fno-sanitize=all{{- end }}
+        {{- if and (eq .Arch "arm") (eq .Arm "6") }}CC=zig cc -target arm-linux-gnueabi -lc -fno-sanitize=all{{- end }}
+        {{- if and (eq .Arch "arm") (eq .Arm "7") }}CC=zig cc -target arm-linux-gnueabihf -lc -fno-sanitize=all{{- end }}
+        {{- else if eq .Os "windows" }}
+        {{- if eq .Arch "amd64" }}CC=zig cc -target x86_64-windows-gnu -lc -fno-sanitize=all -Wno-unused-command-line-argument{{- end }}
+        {{- if eq .Arch "arm64" }}CC=zig cc -target aarch64-windows-gnu -lc -fno-sanitize=all -Wno-unused-command-line-argument{{- end }}
+        {{- end }}
+      # CXX: same pattern as CC.
+      - >-
+        {{- if eq .Os "darwin" }}
+        {{- if eq .Arch "amd64" }}CXX=clang++ -arch x86_64 -isysroot {{ .Env.SDK_PATH }}{{- end }}
+        {{- if eq .Arch "arm64" }}CXX=clang++ -arch arm64 -isysroot {{ .Env.SDK_PATH }}{{- end }}
+        {{- else if eq .Os "linux" }}
+        {{- if eq .Arch "amd64" }}CXX=zig c++ -target x86_64-linux-gnu -lc -fno-sanitize=all{{- end }}
+        {{- if eq .Arch "arm64" }}CXX=zig c++ -target aarch64-linux-gnu -lc -fno-sanitize=all{{- end }}
+        {{- if and (eq .Arch "arm") (eq .Arm "6") }}CXX=zig c++ -target arm-linux-gnueabi -lc -fno-sanitize=all{{- end }}
+        {{- if and (eq .Arch "arm") (eq .Arm "7") }}CXX=zig c++ -target arm-linux-gnueabihf -lc -fno-sanitize=all{{- end }}
+        {{- else if eq .Os "windows" }}
+        {{- if eq .Arch "amd64" }}CXX=zig c++ -target x86_64-windows-gnu -lc -fno-sanitize=all -Wno-unused-command-line-argument{{- end }}
+        {{- if eq .Arch "arm64" }}CXX=zig c++ -target aarch64-windows-gnu -lc -fno-sanitize=all -Wno-unused-command-line-argument{{- end }}
+        {{- end }}
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+      - arm
+    goarm:
+      - '6'
+      - '7'
+    ignore:
+      # macOS does not support 32-bit ARM.
+      - goos: darwin
+        goarch: arm
+      # 32-bit ARM Windows is effectively obsolete; deprecated in Go 1.25.
+      - goos: windows
+        goarch: arm
+
+archives:
+  - formats: [ 'tar.gz' ]
+    wrap_in_directory: true
+    format_overrides:
+      - goos: windows
+        formats: [ 'zip' ]
+    name_template: '{{ .ProjectName }}-{{ .Version }}-{{ .Os }}-{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}'
+    files:
+      - LICENSE
+      - README.md
+
+snapshot:
+  version_template: SNAPSHOT-{{ .Commit }}
+
+checksum:
+  disable: false
+  name_template: '{{ .ProjectName }}-{{ .Version }}-checksums.txt'
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '(?i)^docs?:'
+      - '(?i)^docs\([^:]+\):'
+      - '(?i)^docs\[[^:]+\]:'
+      - '^tests?:'
+      - '(?i)^dev:'
+      - '(?i)^chore:'
+      - Merge pull request
+      - Merge branch
+
+release:
+  github:
+    owner: go-ports
+    name: echovault
+  header: |
+    ## echovault {{ .Version }}
+
+    Release of echovault {{ .Version }}.
+
+    ### Installation
+
+    ```bash
+    go install github.com/go-ports/echovault/cmd/memory@{{ .Tag }}
+    ```
+
+source:
+  enabled: true
+  name_template: '{{ .ProjectName }}-{{ .Version }}-source'
