@@ -236,11 +236,16 @@ func handleContext(ctx context.Context, svc *service.Service, req mcp.CallToolRe
 		})
 	}
 
+	message := "Use memory_search for specific topics. IMPORTANT: You MUST call memory_save before this session ends if you make any changes, decisions, or discoveries."
+	if total == 0 {
+		message += " No memories found for project \"" + project + "\". If this is unexpected, retry with an explicit project name (e.g. memory_context(project: \"myproject\"))."
+	}
+
 	return jsonResult(map[string]any{
 		"total":    total,
 		"showing":  len(memories),
 		"memories": memories,
-		"message":  "Use memory_search for specific topics. IMPORTANT: You MUST call memory_save before this session ends if you make any changes, decisions, or discoveries.",
+		"message":  message,
 	})
 }
 
