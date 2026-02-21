@@ -9,7 +9,7 @@ import (
 	"github.com/yalp/jsonpath"
 )
 
-// JSONPathEquals creates a custom checker for asserting a JSON value against a JSON path expression using `qt.Equals` checker.
+// JSONPathEquals creates a custom checker for asserting a JSON value against a JSON path expression using `qt.DeepEquals` checker.
 func JSONPathEquals(jsonPath string) qt.Checker {
 	return &jsonPathMatchesChecker{jsonPath: jsonPath, checker: qt.DeepEquals}
 }

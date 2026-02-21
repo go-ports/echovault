@@ -271,6 +271,7 @@ func (s *Service) Save(ctx context.Context, raw *models.RawMemoryInput, project 
 
 	// Redact all text fields.
 	patterns := s.getIgnorePatterns()
+	raw.Title = redaction.Redact(raw.Title, patterns)
 	raw.What = redaction.Redact(raw.What, patterns)
 	if raw.Why != "" {
 		raw.Why = redaction.Redact(raw.Why, patterns)
@@ -284,7 +285,10 @@ func (s *Service) Save(ctx context.Context, raw *models.RawMemoryInput, project 
 
 	// Dedup check via FTS.
 	dedupQuery := raw.Title + " " + raw.What
-	candidates, _ := s.database.FTSSearch(dedupQuery, 5, project, "")
+	candidates, dedupErr := s.database.FTSSearch(dedupQuery, 5, project, "")
+	if dedupErr != nil {
+		slog.Warn("Save: dedup search failed", "err", dedupErr)
+	}
 	if len(candidates) > 0 { //nolint:nestif // dedup logic requires evaluating multiple conditions across candidate results
 		// Normalize top score against broader search for reliable thresholding.
 		broad := candidates

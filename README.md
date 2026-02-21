@@ -44,7 +44,7 @@ Download the latest release for your platform from the [releases page](https://g
 
 ```bash
 git clone https://github.com/go-ports/echovault.git
-cd echovault/go
+cd echovault
 make build          # produces ./bin/memory
 sudo cp bin/memory /usr/local/bin/
 ```

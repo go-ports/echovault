@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"sort"
 	"strings"
 	"time"
 )
@@ -66,15 +65,17 @@ func (o *OpenAI) EmbedBatch(ctx context.Context, texts []string) ([][]float32, e
 	if len(resp.Data) == 0 {
 		return nil, fmt.Errorf("openai embed: empty data in response")
 	}
+	if len(resp.Data) != len(texts) {
+		return nil, fmt.Errorf("openai embed: expected %d results, got %d", len(texts), len(resp.Data))
+	}
 
-	// Sort by index to guarantee order matches inputs.
-	sort.Slice(resp.Data, func(i, j int) bool {
-		return resp.Data[i].Index < resp.Data[j].Index
-	})
-
-	results := make([][]float32, len(resp.Data))
-	for i, d := range resp.Data {
-		results[i] = d.Embedding
+	// Fill results by index to handle out-of-order responses and detect gaps.
+	results := make([][]float32, len(texts))
+	for _, d := range resp.Data {
+		if d.Index < 0 || d.Index >= len(texts) {
+			return nil, fmt.Errorf("openai embed: result index %d out of range [0, %d)", d.Index, len(texts))
+		}
+		results[d.Index] = d.Embedding
 	}
 	return results, nil
 }

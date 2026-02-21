@@ -67,6 +67,9 @@ func MergeResults(fts, vec []map[string]any, ftsWeight, vecWeight float64, limit
 	return results
 }
 
+// defaultSearchLimit is the fallback result count when callers pass limit <= 0.
+const defaultSearchLimit = 20
+
 // TieredSearch runs FTS first and only embeds when results are sparse.
 // minFTS is the minimum number of FTS hits before skipping the embed call.
 // Pass minFTS=0 to use the default of 3.
@@ -78,6 +81,9 @@ func TieredSearch(
 	limit, minFTS int,
 	project, source string,
 ) ([]Result, error) {
+	if limit <= 0 {
+		limit = defaultSearchLimit
+	}
 	if minFTS <= 0 {
 		minFTS = 3
 	}
@@ -122,6 +128,9 @@ func HybridSearch(
 	limit int,
 	project, source string,
 ) ([]Result, error) {
+	if limit <= 0 {
+		limit = defaultSearchLimit
+	}
 	ftsRows, err := database.FTSSearch(query, limit*2, project, source)
 	if err != nil {
 		return nil, err

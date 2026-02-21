@@ -99,7 +99,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: memory-windows-arm64
-          path: dist/echovault_windows_amd64_v1/memory.exe
+          path: dist/echovault_windows_arm64_v8.0/memory.exe
           retention-days: 1
 
   # Each job downloads its own platform binary and runs a quick smoke test.

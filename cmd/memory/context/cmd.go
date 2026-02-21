@@ -46,7 +46,7 @@ func New(ctx *shared.Context) *Command {
 	f.BoolVar(&c.showConfig, "show-config", false, "Show effective configuration and exit")
 	f.StringVar(&c.outputFormat, "format", "hook", "Output format: hook | agents-md")
 
-	// --semantic and --fts-only are mutually exclusive flags that set semanticMode.
+	// --semantic controls the search mode: always|never|auto.
 	f.StringVar(&c.semanticMode, "semantic", "", "Force semantic search (always|never|auto)")
 
 	return c
