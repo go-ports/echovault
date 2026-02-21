@@ -2,6 +2,13 @@ version: 2
 
 project_name: echovault
 
+before:
+  hooks:
+    # sqlite-vec-go-bindings/cgo sets -DSQLITE_CORE, so sqlite-vec.h uses
+    # #include "sqlite3.h". For zig cross-compilation targets the SDK sysroot
+    # is unavailable; copy sqlite3.h from the macOS SDK to a known path.
+    - sh -c 'mkdir -p /tmp/sqlite3-cross-include && cp "$(xcrun --show-sdk-path)/usr/include/sqlite3.h" /tmp/sqlite3-cross-include/'
+
 builds:
   - binary: memory
     main: ./cmd/memory/
@@ -10,7 +17,47 @@ builds:
     ldflags: -s -w -X main.version={{.Version}} -X main.commit={{.ShortCommit}} -X main.date={{.Date}}
     env:
       - CGO_ENABLED=1
-      - CGO_CFLAGS=-DSQLITE_ENABLE_FTS5
+      # darwin: export SDKROOT so the linker can find system frameworks.
+      - >-
+        {{- if eq .Os "darwin" }}SDKROOT={{ .Env.SDK_PATH }}{{- end }}
+      - >-
+        {{- if eq .Os "darwin" }}MACOSX_DEPLOYMENT_TARGET=11.0{{- end }}
+      # darwin: sysroot provides sqlite3.h; cross-compilation targets use the staged header.
+      - >-
+        {{- if eq .Os "darwin" }}CGO_CFLAGS=-isysroot {{ .Env.SDK_PATH }} -mmacosx-version-min=11.0 -DSQLITE_ENABLE_FTS5
+        {{- else }}CGO_CFLAGS=-I/tmp/sqlite3-cross-include -DSQLITE_ENABLE_FTS5{{- end }}
+      - >-
+        {{- if eq .Os "darwin" }}CGO_CXXFLAGS=-isysroot {{ .Env.SDK_PATH }} -mmacosx-version-min=11.0{{- end }}
+      - >-
+        {{- if eq .Os "darwin" }}CGO_LDFLAGS=-isysroot {{ .Env.SDK_PATH }}{{- end }}
+      # CC: darwin uses native Xcode clang; linux/windows use zig for cross-compilation.
+      - >-
+        {{- if eq .Os "darwin" }}
+        {{- if eq .Arch "amd64" }}CC=clang -arch x86_64 -isysroot {{ .Env.SDK_PATH }}{{- end }}
+        {{- if eq .Arch "arm64" }}CC=clang -arch arm64 -isysroot {{ .Env.SDK_PATH }}{{- end }}
+        {{- else if eq .Os "linux" }}
+        {{- if eq .Arch "amd64" }}CC=zig cc -target x86_64-linux-gnu -lc -fno-sanitize=all{{- end }}
+        {{- if eq .Arch "arm64" }}CC=zig cc -target aarch64-linux-gnu -lc -fno-sanitize=all{{- end }}
+        {{- if and (eq .Arch "arm") (eq .Arm "6") }}CC=zig cc -target arm-linux-gnueabi -lc -fno-sanitize=all{{- end }}
+        {{- if and (eq .Arch "arm") (eq .Arm "7") }}CC=zig cc -target arm-linux-gnueabihf -lc -fno-sanitize=all{{- end }}
+        {{- else if eq .Os "windows" }}
+        {{- if eq .Arch "amd64" }}CC=zig cc -target x86_64-windows-gnu -lc -fno-sanitize=all -Wno-unused-command-line-argument{{- end }}
+        {{- if eq .Arch "arm64" }}CC=zig cc -target aarch64-windows-gnu -lc -fno-sanitize=all -Wno-unused-command-line-argument{{- end }}
+        {{- end }}
+      # CXX: same pattern as CC.
+      - >-
+        {{- if eq .Os "darwin" }}
+        {{- if eq .Arch "amd64" }}CXX=clang++ -arch x86_64 -isysroot {{ .Env.SDK_PATH }}{{- end }}
+        {{- if eq .Arch "arm64" }}CXX=clang++ -arch arm64 -isysroot {{ .Env.SDK_PATH }}{{- end }}
+        {{- else if eq .Os "linux" }}
+        {{- if eq .Arch "amd64" }}CXX=zig c++ -target x86_64-linux-gnu -lc -fno-sanitize=all{{- end }}
+        {{- if eq .Arch "arm64" }}CXX=zig c++ -target aarch64-linux-gnu -lc -fno-sanitize=all{{- end }}
+        {{- if and (eq .Arch "arm") (eq .Arm "6") }}CXX=zig c++ -target arm-linux-gnueabi -lc -fno-sanitize=all{{- end }}
+        {{- if and (eq .Arch "arm") (eq .Arm "7") }}CXX=zig c++ -target arm-linux-gnueabihf -lc -fno-sanitize=all{{- end }}
+        {{- else if eq .Os "windows" }}
+        {{- if eq .Arch "amd64" }}CXX=zig c++ -target x86_64-windows-gnu -lc -fno-sanitize=all -Wno-unused-command-line-argument{{- end }}
+        {{- if eq .Arch "arm64" }}CXX=zig c++ -target aarch64-windows-gnu -lc -fno-sanitize=all -Wno-unused-command-line-argument{{- end }}
+        {{- end }}
     goos:
       - linux
       - darwin
@@ -29,54 +76,6 @@ builds:
       # 32-bit ARM Windows is effectively obsolete; deprecated in Go 1.25.
       - goos: windows
         goarch: arm
-    overrides:
-      # Linux targets are cross-compiled via zig (musl libc for portability).
-      - goos: linux
-        goarch: amd64
-        env:
-          - CGO_ENABLED=1
-          - CGO_CFLAGS=-DSQLITE_ENABLE_FTS5
-          - CC=zig-cc-x86_64-linux-musl
-          - CXX=zig-cxx-x86_64-linux-musl
-      - goos: linux
-        goarch: arm64
-        env:
-          - CGO_ENABLED=1
-          - CGO_CFLAGS=-DSQLITE_ENABLE_FTS5
-          - CC=zig-cc-aarch64-linux-musl
-          - CXX=zig-cxx-aarch64-linux-musl
-      - goos: linux
-        goarch: arm
-        goarm: '6'
-        env:
-          - CGO_ENABLED=1
-          - CGO_CFLAGS=-DSQLITE_ENABLE_FTS5
-          - CC=zig-cc-arm-linux-musleabi
-          - CXX=zig-cxx-arm-linux-musleabi
-      - goos: linux
-        goarch: arm
-        goarm: '7'
-        env:
-          - CGO_ENABLED=1
-          - CGO_CFLAGS=-DSQLITE_ENABLE_FTS5
-          - CC=zig-cc-arm-linux-musleabihf
-          - CXX=zig-cxx-arm-linux-musleabihf
-      # Windows targets are cross-compiled via zig.
-      - goos: windows
-        goarch: amd64
-        env:
-          - CGO_ENABLED=1
-          - CGO_CFLAGS=-DSQLITE_ENABLE_FTS5
-          - CC=zig-cc-x86_64-windows-gnu
-          - CXX=zig-cxx-x86_64-windows-gnu
-      - goos: windows
-        goarch: arm64
-        env:
-          - CGO_ENABLED=1
-          - CGO_CFLAGS=-DSQLITE_ENABLE_FTS5
-          - CC=zig-cc-aarch64-windows-gnu
-          - CXX=zig-cxx-aarch64-windows-gnu
-      # darwin targets use native Xcode clang — no CC override needed.
 
 archives:
   - formats: [ 'tar.gz' ]
