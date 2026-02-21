@@ -133,7 +133,7 @@ func newMCPClientWithEmbedding(c *qt.C, provider, baseURL string) *mcpclient.Cli
 	c.Assert(err, qt.IsNil)
 	c.TB.Cleanup(func() { _ = svc.Close() })
 
-	cl, err := mcpclient.NewInProcessClient(internalmcp.NewServer(svc))
+	cl, err := mcpclient.NewInProcessClient(internalmcp.NewServer(svc, nil))
 	c.Assert(err, qt.IsNil)
 	c.TB.Cleanup(func() { _ = cl.Close() })
 

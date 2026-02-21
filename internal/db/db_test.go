@@ -11,6 +11,19 @@ import (
 	"github.com/go-ports/echovault/internal/models"
 )
 
+// newMemAt returns a *models.Memory with the given created/updated timestamps.
+func newMemAt(id, title, project string, createdAt time.Time) *models.Memory {
+	return &models.Memory{
+		ID:        id,
+		Title:     title,
+		What:      "what about " + title,
+		Project:   project,
+		FilePath:  "/vault/" + project + "/2024-01-15-session.md",
+		CreatedAt: createdAt,
+		UpdatedAt: createdAt,
+	}
+}
+
 // openTestDB opens a fresh SQLite database in a temp directory and registers
 // t.Cleanup to close it.
 func openTestDB(t *testing.T) *db.DB {
@@ -388,5 +401,181 @@ func TestFTSSearch_HappyPath(t *testing.T) {
 		rows, err := d.FTSSearch("sqlite", 2, "", "")
 		c.Assert(err, qt.IsNil)
 		c.Assert(len(rows) <= 2, qt.IsTrue)
+	})
+}
+
+// ---------------------------------------------------------------------------
+// DeleteByFilter
+// ---------------------------------------------------------------------------
+
+func TestDeleteByFilter_HappyPath(t *testing.T) {
+	c := qt.New(t)
+
+	old := time.Now().UTC().Add(-48 * time.Hour)
+	recent := time.Now().UTC()
+	future := time.Now().UTC().Add(24 * time.Hour)
+
+	c.Run("deletes memories older than cutoff", func(c *qt.C) {
+		d := openTestDB(t)
+		_, _ = d.InsertMemory(newMemAt("old-1", "Old", "proj", old), "")
+		_, _ = d.InsertMemory(newMemAt("new-1", "New", "proj", recent), "")
+
+		count, err := d.DeleteByFilter("", "", future)
+		c.Assert(err, qt.IsNil)
+		c.Assert(count, qt.Equals, 2)
+
+		n, err := d.CountMemories("", "")
+		c.Assert(err, qt.IsNil)
+		c.Assert(n, qt.Equals, 0)
+	})
+
+	c.Run("project filter deletes only matching project", func(c *qt.C) {
+		d := openTestDB(t)
+		_, _ = d.InsertMemory(newMemAt("a1", "T", "proj-a", old), "")
+		_, _ = d.InsertMemory(newMemAt("b1", "T", "proj-b", old), "")
+
+		count, err := d.DeleteByFilter("proj-a", "", future)
+		c.Assert(err, qt.IsNil)
+		c.Assert(count, qt.Equals, 1)
+
+		n, err := d.CountMemories("", "")
+		c.Assert(err, qt.IsNil)
+		c.Assert(n, qt.Equals, 1)
+	})
+
+	c.Run("category filter deletes only matching category", func(c *qt.C) {
+		d := openTestDB(t)
+		mDecision := newMemAt("cat-dec", "T", "proj", old)
+		mDecision.Category = "decision"
+		mPattern := newMemAt("cat-pat", "T", "proj", old)
+		mPattern.Category = "pattern"
+		_, _ = d.InsertMemory(mDecision, "")
+		_, _ = d.InsertMemory(mPattern, "")
+
+		count, err := d.DeleteByFilter("", "decision", future)
+		c.Assert(err, qt.IsNil)
+		c.Assert(count, qt.Equals, 1)
+
+		n, err := d.CountMemories("", "")
+		c.Assert(err, qt.IsNil)
+		c.Assert(n, qt.Equals, 1)
+	})
+
+	c.Run("newer memories are not deleted", func(c *qt.C) {
+		d := openTestDB(t)
+		_, _ = d.InsertMemory(newMemAt("keep-1", "Keep", "proj", recent), "")
+
+		cutoff := time.Now().UTC().Add(-1 * time.Hour)
+		count, err := d.DeleteByFilter("", "", cutoff)
+		c.Assert(err, qt.IsNil)
+		c.Assert(count, qt.Equals, 0)
+
+		n, err := d.CountMemories("", "")
+		c.Assert(err, qt.IsNil)
+		c.Assert(n, qt.Equals, 1)
+	})
+
+	c.Run("also deletes associated memory_details", func(c *qt.C) {
+		d := openTestDB(t)
+		_, _ = d.InsertMemory(newMemAt("det-1", "T", "proj", old), "the details body")
+
+		_, err := d.DeleteByFilter("", "", future)
+		c.Assert(err, qt.IsNil)
+
+		detail, err := d.GetDetails("det-1")
+		c.Assert(err, qt.IsNil)
+		c.Assert(detail, qt.IsNil)
+	})
+}
+
+func TestDeleteByFilter_FailurePath(t *testing.T) {
+	c := qt.New(t)
+
+	c.Run("no matching records returns zero without error", func(c *qt.C) {
+		d := openTestDB(t)
+		cutoff := time.Now().UTC().Add(-30 * 24 * time.Hour)
+		count, err := d.DeleteByFilter("", "", cutoff)
+		c.Assert(err, qt.IsNil)
+		c.Assert(count, qt.Equals, 0)
+	})
+}
+
+// ---------------------------------------------------------------------------
+// ReplaceMemory
+// ---------------------------------------------------------------------------
+
+func TestReplaceMemory_HappyPath(t *testing.T) {
+	c := qt.New(t)
+
+	c.Run("replaces all mutable fields", func(c *qt.C) {
+		d := openTestDB(t)
+		_, _ = d.InsertMemory(newMem("rep-1", "Original Title", "proj"), "original details")
+
+		ok, err := d.ReplaceMemory("rep-1", "New Title", "new what", "new why", "new impact",
+			[]string{"tag1"}, []string{"file.go"}, "decision", "new details")
+		c.Assert(err, qt.IsNil)
+		c.Assert(ok, qt.IsTrue)
+
+		got, found, err := d.GetMemory("rep-1")
+		c.Assert(err, qt.IsNil)
+		c.Assert(found, qt.IsTrue)
+		c.Assert(got["title"], qt.Equals, "New Title")
+		c.Assert(got["what"], qt.Equals, "new what")
+		c.Assert(got["why"], qt.Equals, "new why")
+		c.Assert(got["category"], qt.Equals, "decision")
+	})
+
+	c.Run("replaces details body entirely", func(c *qt.C) {
+		d := openTestDB(t)
+		_, _ = d.InsertMemory(newMem("rep-2", "T", "p"), "old details")
+
+		_, err := d.ReplaceMemory("rep-2", "T", "w", "", "",
+			make([]string, 0), make([]string, 0), "context", "completely new details")
+		c.Assert(err, qt.IsNil)
+
+		detail, err := d.GetDetails("rep-2")
+		c.Assert(err, qt.IsNil)
+		c.Assert(detail, qt.IsNotNil)
+		c.Assert(detail.Body, qt.Equals, "completely new details")
+	})
+
+	c.Run("empty details removes existing details", func(c *qt.C) {
+		d := openTestDB(t)
+		_, _ = d.InsertMemory(newMem("rep-3", "T", "p"), "some details")
+
+		_, err := d.ReplaceMemory("rep-3", "T", "w", "", "",
+			make([]string, 0), make([]string, 0), "context", "")
+		c.Assert(err, qt.IsNil)
+
+		detail, err := d.GetDetails("rep-3")
+		c.Assert(err, qt.IsNil)
+		c.Assert(detail, qt.IsNil)
+	})
+
+	c.Run("prefix match works", func(c *qt.C) {
+		d := openTestDB(t)
+		_, _ = d.InsertMemory(newMem("prefix-xyz-789", "T", "p"), "")
+
+		ok, err := d.ReplaceMemory("prefix-xyz", "Updated", "w", "", "",
+			make([]string, 0), make([]string, 0), "pattern", "")
+		c.Assert(err, qt.IsNil)
+		c.Assert(ok, qt.IsTrue)
+
+		got, found, err := d.GetMemory("prefix-xyz-789")
+		c.Assert(err, qt.IsNil)
+		c.Assert(found, qt.IsTrue)
+		c.Assert(got["title"], qt.Equals, "Updated")
+	})
+}
+
+func TestReplaceMemory_FailurePath(t *testing.T) {
+	c := qt.New(t)
+
+	c.Run("non-existent ID returns false without error", func(c *qt.C) {
+		d := openTestDB(t)
+		ok, err := d.ReplaceMemory("ghost", "T", "w", "", "",
+			make([]string, 0), make([]string, 0), "context", "")
+		c.Assert(err, qt.IsNil)
+		c.Assert(ok, qt.IsFalse)
 	})
 }

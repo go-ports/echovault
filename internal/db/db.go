@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math"
 	"strconv"
 	"strings"
@@ -96,6 +97,10 @@ func (d *DB) createSchema() error {
 			VALUES ('delete', old.rowid, old.title, old.what, old.why, old.impact, old.tags, old.category, old.project, old.source);
 			INSERT INTO memories_fts(rowid, title, what, why, impact, tags, category, project, source)
 			VALUES (new.rowid, new.title, new.what, new.why, new.impact, new.tags, new.category, new.project, new.source);
+		END`,
+		`CREATE TRIGGER IF NOT EXISTS memories_ad AFTER DELETE ON memories BEGIN
+			INSERT INTO memories_fts(memories_fts, rowid, title, what, why, impact, tags, category, project, source)
+			VALUES ('delete', old.rowid, old.title, old.what, old.why, old.impact, old.tags, old.category, old.project, old.source);
 		END`,
 	}
 
@@ -386,9 +391,10 @@ func (d *DB) UpdateMemory(id, what, why, impact string, tags []string, detailsAp
 // Returns true if a record was found and deleted.
 func (d *DB) DeleteMemory(id string) (bool, error) {
 	var fullID string
+	var rowid int64
 	err := d.db.QueryRow(
-		`SELECT id FROM memories WHERE id LIKE ?`, id+"%",
-	).Scan(&fullID)
+		`SELECT id, rowid FROM memories WHERE id LIKE ?`, id+"%",
+	).Scan(&fullID, &rowid)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, nil
 	}
@@ -399,8 +405,120 @@ func (d *DB) DeleteMemory(id string) (bool, error) {
 	if _, err := d.db.Exec(`DELETE FROM memory_details WHERE memory_id = ?`, fullID); err != nil {
 		return false, err
 	}
+	// Clean up vector index before deleting the memory row (rowid is needed).
+	if _, err := d.db.Exec(`DELETE FROM memories_vec WHERE rowid = ?`, rowid); err != nil {
+		// Non-fatal: vec table may not exist yet.
+		slog.Debug("DeleteMemory: vec cleanup skipped", "err", err)
+	}
 	if _, err := d.db.Exec(`DELETE FROM memories WHERE id = ?`, fullID); err != nil {
 		return false, err
+	}
+	return true, nil
+}
+
+// DeleteByFilter deletes all memories whose created_at is before `before`,
+// optionally filtered by project and/or category.
+// Returns the number of deleted records.
+func (d *DB) DeleteByFilter(project, category string, before time.Time) (int, error) {
+	// Collect rowids and IDs to handle cascaded cleanup.
+	var clauses []string
+	var params []any
+	clauses = append(clauses, "created_at < ?")
+	params = append(params, before.UTC().Format(time.RFC3339))
+	if project != "" {
+		clauses = append(clauses, "project = ?")
+		params = append(params, project)
+	}
+	if category != "" {
+		clauses = append(clauses, "category = ?")
+		params = append(params, category)
+	}
+	where := " WHERE " + strings.Join(clauses, " AND ")
+
+	rows, err := d.db.Query("SELECT id, rowid FROM memories"+where, params...) // #nosec G202 -- WHERE clause uses hardcoded column names only; values flow through ? bound parameters
+	if err != nil {
+		return 0, fmt.Errorf("DeleteByFilter: query: %w", err)
+	}
+	type entry struct {
+		id    string
+		rowid int64
+	}
+	var entries []entry
+	for rows.Next() {
+		var e entry
+		if err := rows.Scan(&e.id, &e.rowid); err != nil {
+			rows.Close()
+			return 0, fmt.Errorf("DeleteByFilter: scan: %w", err)
+		}
+		entries = append(entries, e)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return 0, fmt.Errorf("DeleteByFilter: rows: %w", err)
+	}
+
+	for _, e := range entries {
+		if _, err := d.db.Exec(`DELETE FROM memory_details WHERE memory_id = ?`, e.id); err != nil {
+			return 0, fmt.Errorf("DeleteByFilter: details: %w", err)
+		}
+		if _, err := d.db.Exec(`DELETE FROM memories_vec WHERE rowid = ?`, e.rowid); err != nil {
+			slog.Debug("DeleteByFilter: vec cleanup skipped", "err", err)
+		}
+		if _, err := d.db.Exec(`DELETE FROM memories WHERE id = ?`, e.id); err != nil {
+			return 0, fmt.Errorf("DeleteByFilter: memory: %w", err)
+		}
+	}
+	return len(entries), nil
+}
+
+// ReplaceMemory fully overwrites all mutable fields of an existing memory
+// (prefix-matched by ID) and replaces the details body.
+// Returns true if the memory was found and replaced.
+func (d *DB) ReplaceMemory(id, title, what, why, impact string, tags, relatedFiles []string, category, details string) (bool, error) {
+	var fullID string
+	err := d.db.QueryRow(
+		`SELECT id FROM memories WHERE id LIKE ?`, id+"%",
+	).Scan(&fullID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+
+	tagsJSON, err := json.Marshal(tags)
+	if err != nil {
+		return false, fmt.Errorf("ReplaceMemory: marshal tags: %w", err)
+	}
+	filesJSON, err := json.Marshal(relatedFiles)
+	if err != nil {
+		return false, fmt.Errorf("ReplaceMemory: marshal files: %w", err)
+	}
+
+	_, err = d.db.Exec(`
+		UPDATE memories
+		SET title = ?, what = ?, why = ?, impact = ?, tags = ?,
+		    related_files = ?, category = ?,
+		    updated_at = ?, updated_count = updated_count + 1
+		WHERE id = ?`,
+		title, what, why, impact, string(tagsJSON),
+		string(filesJSON), category,
+		time.Now().UTC().Format(time.RFC3339), fullID,
+	)
+	if err != nil {
+		return false, fmt.Errorf("ReplaceMemory: update: %w", err)
+	}
+
+	if details != "" {
+		_, err = d.db.Exec(
+			`INSERT OR REPLACE INTO memory_details (memory_id, body) VALUES (?, ?)`,
+			fullID, details,
+		)
+	} else {
+		_, err = d.db.Exec(`DELETE FROM memory_details WHERE memory_id = ?`, fullID)
+	}
+	if err != nil {
+		return false, fmt.Errorf("ReplaceMemory: details: %w", err)
 	}
 	return true, nil
 }

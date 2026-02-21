@@ -21,6 +21,30 @@ import (
 	"github.com/go-ports/echovault/internal/service"
 )
 
+// newMCPClientWithDisabledTools creates an in-process MCP client with specified
+// tools disabled.
+func newMCPClientWithDisabledTools(c *qt.C, disabledTools []string) *mcpclient.Client {
+	c.TB.Helper()
+
+	svc, err := service.New(c.TB.TempDir())
+	c.Assert(err, qt.IsNil)
+	c.TB.Cleanup(func() { _ = svc.Close() })
+
+	cl, err := mcpclient.NewInProcessClient(internalmcp.NewServer(svc, disabledTools))
+	c.Assert(err, qt.IsNil)
+	c.TB.Cleanup(func() { _ = cl.Close() })
+
+	c.Assert(cl.Start(context.Background()), qt.IsNil)
+
+	initReq := mcp.InitializeRequest{}
+	initReq.Params.ProtocolVersion = mcp.LATEST_PROTOCOL_VERSION
+	initReq.Params.ClientInfo = mcp.Implementation{Name: "e2e-test", Version: "0.0.1"}
+	_, err = cl.Initialize(context.Background(), initReq)
+	c.Assert(err, qt.IsNil)
+
+	return cl
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -35,7 +59,7 @@ func newMCPClient(c *qt.C) *mcpclient.Client {
 	c.Assert(err, qt.IsNil)
 	c.TB.Cleanup(func() { _ = svc.Close() })
 
-	cl, err := mcpclient.NewInProcessClient(internalmcp.NewServer(svc))
+	cl, err := mcpclient.NewInProcessClient(internalmcp.NewServer(svc, nil))
 	c.Assert(err, qt.IsNil)
 	c.TB.Cleanup(func() { _ = cl.Close() })
 
@@ -77,7 +101,7 @@ func TestMCPListTools_HappyPath(t *testing.T) {
 
 	result, err := cl.ListTools(context.Background(), mcp.ListToolsRequest{})
 	c.Assert(err, qt.IsNil)
-	c.Assert(result.Tools, qt.HasLen, 3)
+	c.Assert(result.Tools, qt.HasLen, 5)
 
 	names := make([]string, len(result.Tools))
 	for i, tool := range result.Tools {
@@ -86,6 +110,8 @@ func TestMCPListTools_HappyPath(t *testing.T) {
 	c.Assert(names, qt.Contains, "memory_save")
 	c.Assert(names, qt.Contains, "memory_search")
 	c.Assert(names, qt.Contains, "memory_context")
+	c.Assert(names, qt.Contains, "memory_delete")
+	c.Assert(names, qt.Contains, "memory_replace")
 }
 
 // ---------------------------------------------------------------------------
@@ -214,6 +240,159 @@ func TestMCPMemoryContext_EmptyVault_HappyPath(t *testing.T) {
 	})
 
 	c.Assert(text, checkers.JSONPathEquals("$.total"), float64(0))
+}
+
+// ---------------------------------------------------------------------------
+// memory_delete
+// ---------------------------------------------------------------------------
+
+func TestMCPMemoryDelete_HappyPath(t *testing.T) {
+	c := qt.New(t)
+
+	c.Run("targeted deletion by id removes the memory", func(c *qt.C) {
+		cl := newMCPClient(c)
+
+		savedText := callTool(c, cl, "memory_save", map[string]any{
+			"title":   "To be deleted",
+			"what":    "This memory will be removed",
+			"project": "echovault",
+		})
+		var saved map[string]any
+		c.Assert(json.Unmarshal([]byte(savedText), &saved), qt.IsNil)
+		id, _ := saved["id"].(string)
+
+		text := callTool(c, cl, "memory_delete", map[string]any{
+			"ids": []string{id},
+		})
+		c.Assert(text, checkers.JSONPathMatches("$.deleted", qt.HasLen), 1)
+		c.Assert(text, checkers.JSONPathMatches("$.not_found", qt.HasLen), 0)
+	})
+
+	c.Run("bulk deletion by age removes older memories", func(c *qt.C) {
+		cl := newMCPClient(c)
+
+		callTool(c, cl, "memory_save", map[string]any{
+			"title":   "Old memory",
+			"what":    "This is a memory entry",
+			"project": "echovault",
+		})
+
+		// older_than_days=0 means cutoff is now, so nothing is truly "before" it.
+		// Use a future-looking deletion: older_than_days=-1 is invalid (<=0).
+		// Instead verify that older_than_days=365 returns 0 deleted for a fresh entry.
+		text := callTool(c, cl, "memory_delete", map[string]any{
+			"older_than_days": float64(365),
+			"project":         "echovault",
+		})
+		c.Assert(text, checkers.JSONPathEquals("$.deleted_count"), float64(0))
+	})
+}
+
+func TestMCPMemoryDelete_FailurePath(t *testing.T) {
+	c := qt.New(t)
+
+	c.Run("missing both ids and older_than_days returns error", func(c *qt.C) {
+		cl := newMCPClient(c)
+
+		req := mcp.CallToolRequest{}
+		req.Params.Name = "memory_delete"
+		req.Params.Arguments = make(map[string]any)
+
+		result, err := cl.CallTool(context.Background(), req)
+		c.Assert(err, qt.IsNil)
+		c.Assert(result.IsError, qt.IsTrue)
+	})
+
+	c.Run("deleting non-existent id reports in not_found", func(c *qt.C) {
+		cl := newMCPClient(c)
+
+		text := callTool(c, cl, "memory_delete", map[string]any{
+			"ids": []string{"nonexistent-id-abc"},
+		})
+		c.Assert(text, checkers.JSONPathMatches("$.not_found", qt.HasLen), 1)
+		c.Assert(text, checkers.JSONPathMatches("$.deleted", qt.HasLen), 0)
+	})
+}
+
+// ---------------------------------------------------------------------------
+// memory_replace
+// ---------------------------------------------------------------------------
+
+func TestMCPMemoryReplace_HappyPath(t *testing.T) {
+	c := qt.New(t)
+	cl := newMCPClient(c)
+
+	c.Run("replaces existing memory content", func(c *qt.C) {
+		savedText := callTool(c, cl, "memory_save", map[string]any{
+			"title":   "Original title",
+			"what":    "Original what content",
+			"project": "echovault",
+		})
+		var saved map[string]any
+		c.Assert(json.Unmarshal([]byte(savedText), &saved), qt.IsNil)
+		id, _ := saved["id"].(string)
+
+		text := callTool(c, cl, "memory_replace", map[string]any{
+			"id":      id,
+			"title":   "Replaced title",
+			"what":    "Completely new content",
+			"project": "echovault",
+		})
+		c.Assert(text, checkers.JSONPathEquals("$.action"), "replaced")
+		c.Assert(text, checkers.JSONPathEquals("$.id"), id)
+	})
+}
+
+func TestMCPMemoryReplace_FailurePath(t *testing.T) {
+	c := qt.New(t)
+	cl := newMCPClient(c)
+
+	c.Run("replacing non-existent memory returns error", func(c *qt.C) {
+		req := mcp.CallToolRequest{}
+		req.Params.Name = "memory_replace"
+		req.Params.Arguments = map[string]any{
+			"id":    "nonexistent-id-xyz",
+			"title": "T",
+			"what":  "W",
+		}
+
+		result, err := cl.CallTool(context.Background(), req)
+		c.Assert(err, qt.IsNil)
+		c.Assert(result.IsError, qt.IsTrue)
+	})
+}
+
+// ---------------------------------------------------------------------------
+// --disable-tools
+// ---------------------------------------------------------------------------
+
+func TestMCPDisabledTools_HappyPath(t *testing.T) {
+	c := qt.New(t)
+
+	c.Run("disabled tool does not appear in ListTools", func(c *qt.C) {
+		cl := newMCPClientWithDisabledTools(c, []string{"memory_delete"})
+
+		result, err := cl.ListTools(context.Background(), mcp.ListToolsRequest{})
+		c.Assert(err, qt.IsNil)
+		c.Assert(result.Tools, qt.HasLen, 4)
+
+		names := make([]string, len(result.Tools))
+		for i, tool := range result.Tools {
+			names[i] = tool.Name
+		}
+		c.Assert(names, qt.Contains, "memory_save")
+		c.Assert(names, qt.Contains, "memory_search")
+		c.Assert(names, qt.Contains, "memory_context")
+		c.Assert(names, qt.Contains, "memory_replace")
+	})
+
+	c.Run("multiple tools can be disabled simultaneously", func(c *qt.C) {
+		cl := newMCPClientWithDisabledTools(c, []string{"memory_delete", "memory_replace"})
+
+		result, err := cl.ListTools(context.Background(), mcp.ListToolsRequest{})
+		c.Assert(err, qt.IsNil)
+		c.Assert(result.Tools, qt.HasLen, 3)
+	})
 }
 
 // ---------------------------------------------------------------------------

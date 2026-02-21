@@ -20,6 +20,27 @@ import (
 
 var validCategories = []string{"decision", "bug", "pattern", "learning", "context"}
 
+const deleteDescription = `Delete one or more memories to keep your memory store lean and accurate.
+
+Use this tool in two ways:
+
+1. Targeted deletion (ids): remove specific memories whose content you have determined is
+outdated, incorrect, or no longer relevant. Workflow — call memory_context or memory_search
+to review existing memories, reason about which ones are stale (e.g. a decision was reversed,
+a bug fix no longer applies, a pattern was removed from the codebase), then pass their IDs here.
+
+2. Bulk deletion by age (older_than_days): remove all memories older than N days, optionally scoped to a project or category. Use this for periodic housekeeping.
+
+At least one of ` + "`ids`" + ` or ` + "`older_than_days`" + ` must be provided.`
+
+const replaceDescription = `Fully replace the content of an existing memory with new, correct information.
+
+Prefer this over memory_save when the existing memory contains wrong or outdated information that must be overwritten rather than appended to. memory_save deduplicates and merges; memory_replace discards the old content entirely.
+
+Workflow: use memory_search or memory_context to find the memory ID, then call memory_replace with the corrected content.
+
+All fields except ` + "`id`" + ` behave the same as in memory_save.`
+
 const saveDescription = `
 Save a memory for future sessions. You MUST call this before ending any session where you made changes, fixed bugs, made decisions, or learned something. This is not optional — failing to save means the next session starts from zero.
 
@@ -44,93 +65,177 @@ const searchDescription = `Search memories using keyword and semantic search. Re
 
 const contextDescription = `Get memory context for the current project. You MUST call this at session start to load prior decisions, bugs, and context. Do not skip this step — prior sessions contain decisions and context that directly affect your current task. Use memory_search for specific topics.` //nolint:lll
 
-// NewServer creates and registers all memory tools on a new MCP server.
+// NewServer creates and registers memory tools on a new MCP server.
+// Tools listed in disabledTools are skipped during registration.
 // It is intentionally separate from Serve so that tests and other callers can
 // obtain a fully configured server without committing to the stdio transport.
-func NewServer(svc *service.Service) *mcpserver.MCPServer {
+func NewServer(svc *service.Service, disabledTools []string) *mcpserver.MCPServer {
 	s := mcpserver.NewMCPServer("echovault", buildinfo.Version)
-	registerTools(s, svc)
+	registerTools(s, svc, disabledTools)
 	return s
 }
 
 // Serve starts the stdio MCP server, blocking until stdin closes.
-func Serve(_ context.Context) error {
+// Tools listed in disabledTools are not registered and will be unavailable.
+func Serve(_ context.Context, disabledTools []string) error {
 	svc, err := service.New("")
 	if err != nil {
 		return fmt.Errorf("mcp: init service: %w", err)
 	}
 	defer svc.Close()
 
-	return mcpserver.ServeStdio(NewServer(svc))
+	return mcpserver.ServeStdio(NewServer(svc, disabledTools))
 }
 
-// registerTools wires all three MCP tools into the server.
-func registerTools(s *mcpserver.MCPServer, svc *service.Service) {
-	s.AddTool(mcp.NewTool("memory_save",
-		mcp.WithDescription(saveDescription),
-		mcp.WithString("title",
-			mcp.Description("Short title, max 60 chars."),
-			mcp.Required(),
-		),
-		mcp.WithString("what",
-			mcp.Description("1-2 sentences. The essence a future agent needs."),
-			mcp.Required(),
-		),
-		mcp.WithString("why",
-			mcp.Description("Reasoning behind the decision or fix."),
-		),
-		mcp.WithString("impact",
-			mcp.Description("What changed as a result."),
-		),
-		mcp.WithArray("tags",
-			mcp.Description("Relevant tags."),
-			mcp.WithStringItems(),
-		),
-		mcp.WithString("category",
-			mcp.Description("decision: chose X over Y. bug: fixed a problem. pattern: reusable gotcha. learning: non-obvious discovery. context: project setup/architecture."),
-			mcp.Enum(validCategories...),
-		),
-		mcp.WithArray("related_files",
-			mcp.Description("File paths involved."),
-			mcp.WithStringItems(),
-		),
-		mcp.WithString("details",
-			mcp.Description("Full context for a future agent with zero context. Prefer: Context, Options considered, Decision, Tradeoffs, Follow-up."),
-		),
-		mcp.WithString("project",
-			mcp.Description("Project name. Auto-detected from cwd if omitted."),
-		),
-	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleSave(ctx, svc, req)
-	})
+// isDisabled returns true when name appears in the disabled list.
+func isDisabled(name string, disabled []string) bool {
+	for _, d := range disabled {
+		if d == name {
+			return true
+		}
+	}
+	return false
+}
 
-	s.AddTool(mcp.NewTool("memory_search",
-		mcp.WithDescription(searchDescription),
-		mcp.WithString("query",
-			mcp.Description("Search terms"),
-			mcp.Required(),
-		),
-		mcp.WithNumber("limit",
-			mcp.Description("Max results (default 5)"),
-		),
-		mcp.WithString("project",
-			mcp.Description("Filter to project."),
-		),
-	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleSearch(ctx, svc, req)
-	})
+// registerTools wires all MCP tools into the server, skipping any in disabledTools.
+func registerTools(s *mcpserver.MCPServer, svc *service.Service, disabledTools []string) {
+	if !isDisabled("memory_save", disabledTools) {
+		s.AddTool(mcp.NewTool("memory_save",
+			mcp.WithDescription(saveDescription),
+			mcp.WithString("title",
+				mcp.Description("Short title, max 60 chars."),
+				mcp.Required(),
+			),
+			mcp.WithString("what",
+				mcp.Description("1-2 sentences. The essence a future agent needs."),
+				mcp.Required(),
+			),
+			mcp.WithString("why",
+				mcp.Description("Reasoning behind the decision or fix."),
+			),
+			mcp.WithString("impact",
+				mcp.Description("What changed as a result."),
+			),
+			mcp.WithArray("tags",
+				mcp.Description("Relevant tags."),
+				mcp.WithStringItems(),
+			),
+			mcp.WithString("category",
+				mcp.Description("decision: chose X over Y. bug: fixed a problem. pattern: reusable gotcha. learning: non-obvious discovery. context: project setup/architecture."),
+				mcp.Enum(validCategories...),
+			),
+			mcp.WithArray("related_files",
+				mcp.Description("File paths involved."),
+				mcp.WithStringItems(),
+			),
+			mcp.WithString("details",
+				mcp.Description("Full context for a future agent with zero context. Prefer: Context, Options considered, Decision, Tradeoffs, Follow-up."),
+			),
+			mcp.WithString("project",
+				mcp.Description("Project name. Auto-detected from cwd if omitted."),
+			),
+		), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			return handleSave(ctx, svc, req)
+		})
+	}
 
-	s.AddTool(mcp.NewTool("memory_context",
-		mcp.WithDescription(contextDescription),
-		mcp.WithString("project",
-			mcp.Description("Project name. Auto-detected from cwd if omitted."),
-		),
-		mcp.WithNumber("limit",
-			mcp.Description("Max memories (default 10)"),
-		),
-	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleContext(ctx, svc, req)
-	})
+	if !isDisabled("memory_search", disabledTools) {
+		s.AddTool(mcp.NewTool("memory_search",
+			mcp.WithDescription(searchDescription),
+			mcp.WithString("query",
+				mcp.Description("Search terms"),
+				mcp.Required(),
+			),
+			mcp.WithNumber("limit",
+				mcp.Description("Max results (default 5)"),
+			),
+			mcp.WithString("project",
+				mcp.Description("Filter to project."),
+			),
+		), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			return handleSearch(ctx, svc, req)
+		})
+	}
+
+	if !isDisabled("memory_context", disabledTools) {
+		s.AddTool(mcp.NewTool("memory_context",
+			mcp.WithDescription(contextDescription),
+			mcp.WithString("project",
+				mcp.Description("Project name. Auto-detected from cwd if omitted."),
+			),
+			mcp.WithNumber("limit",
+				mcp.Description("Max memories (default 10)"),
+			),
+		), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			return handleContext(ctx, svc, req)
+		})
+	}
+
+	if !isDisabled("memory_delete", disabledTools) {
+		s.AddTool(mcp.NewTool("memory_delete",
+			mcp.WithDescription(deleteDescription),
+			mcp.WithArray("ids",
+				mcp.Description("IDs (or prefixes) of memories to delete."),
+				mcp.WithStringItems(),
+			),
+			mcp.WithNumber("older_than_days",
+				mcp.Description("Delete all memories older than this many days."),
+			),
+			mcp.WithString("project",
+				mcp.Description("Scope bulk deletion to this project (only with older_than_days)."),
+			),
+			mcp.WithString("category",
+				mcp.Description("Scope bulk deletion to this category (only with older_than_days)."),
+				mcp.Enum(validCategories...),
+			),
+		), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			return handleDelete(ctx, svc, req)
+		})
+	}
+
+	if !isDisabled("memory_replace", disabledTools) {
+		s.AddTool(mcp.NewTool("memory_replace",
+			mcp.WithDescription(replaceDescription),
+			mcp.WithString("id",
+				mcp.Description("ID (or prefix) of the memory to replace."),
+				mcp.Required(),
+			),
+			mcp.WithString("title",
+				mcp.Description("Short title, max 60 chars."),
+				mcp.Required(),
+			),
+			mcp.WithString("what",
+				mcp.Description("1-2 sentences. The essence a future agent needs."),
+				mcp.Required(),
+			),
+			mcp.WithString("why",
+				mcp.Description("Reasoning behind the decision or fix."),
+			),
+			mcp.WithString("impact",
+				mcp.Description("What changed as a result."),
+			),
+			mcp.WithArray("tags",
+				mcp.Description("Relevant tags."),
+				mcp.WithStringItems(),
+			),
+			mcp.WithString("category",
+				mcp.Description("decision: chose X over Y. bug: fixed a problem. pattern: reusable gotcha. learning: non-obvious discovery. context: project setup/architecture."),
+				mcp.Enum(validCategories...),
+			),
+			mcp.WithArray("related_files",
+				mcp.Description("File paths involved."),
+				mcp.WithStringItems(),
+			),
+			mcp.WithString("details",
+				mcp.Description("Full context for a future agent with zero context."),
+			),
+			mcp.WithString("project",
+				mcp.Description("Project name. Auto-detected from cwd if omitted."),
+			),
+		), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			return handleReplace(ctx, svc, req)
+		})
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -246,6 +351,82 @@ func handleContext(ctx context.Context, svc *service.Service, req mcp.CallToolRe
 		"showing":  len(memories),
 		"memories": memories,
 		"message":  message,
+	})
+}
+
+func handleDelete(_ context.Context, svc *service.Service, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	ids := req.GetStringSlice("ids", make([]string, 0))
+	olderThanDays := req.GetInt("older_than_days", 0)
+
+	if len(ids) == 0 && olderThanDays <= 0 {
+		return mcp.NewToolResultError("at least one of 'ids' or 'older_than_days' must be provided"), nil
+	}
+
+	if len(ids) > 0 {
+		deleted := make([]string, 0, len(ids))
+		notFound := make([]string, 0)
+		for _, id := range ids {
+			found, err := svc.Delete(id)
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("delete %q: %s", id, err.Error())), nil
+			}
+			if found {
+				deleted = append(deleted, id)
+			} else {
+				notFound = append(notFound, id)
+			}
+		}
+		return jsonResult(map[string]any{
+			"deleted":   deleted,
+			"not_found": notFound,
+		})
+	}
+
+	// Bulk deletion by age.
+	project := req.GetString("project", "")
+	category := req.GetString("category", "")
+	count, err := svc.DeleteByFilter(project, category, olderThanDays)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	return jsonResult(map[string]any{
+		"deleted_count":   count,
+		"older_than_days": olderThanDays,
+		"project":         project,
+		"category":        category,
+	})
+}
+
+func handleReplace(ctx context.Context, svc *service.Service, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	id := req.GetString("id", "")
+	if id == "" {
+		return mcp.NewToolResultError("'id' is required"), nil
+	}
+
+	category := req.GetString("category", "")
+	if !isValidCategory(category) {
+		category = "context"
+	}
+
+	raw := &models.RawMemoryInput{
+		Title:        truncate(req.GetString("title", ""), 60),
+		What:         req.GetString("what", ""),
+		Why:          req.GetString("why", ""),
+		Impact:       req.GetString("impact", ""),
+		Tags:         req.GetStringSlice("tags", make([]string, 0)),
+		Category:     category,
+		RelatedFiles: req.GetStringSlice("related_files", make([]string, 0)),
+		Details:      req.GetString("details", ""),
+	}
+
+	result, err := svc.Replace(ctx, id, raw)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	return jsonResult(map[string]any{
+		"id":     result.ID,
+		"action": result.Action,
 	})
 }
 
