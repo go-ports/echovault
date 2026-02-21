@@ -36,7 +36,7 @@ jobs:
       - name: Set up Zig
         uses: mlugg/setup-zig@v1
         with:
-          version: '0.15.2'
+          version: 'latest'
 
       - name: Set macOS SDK path
         run: echo "SDK_PATH=$(xcrun --show-sdk-path)" >> "$GITHUB_ENV"
