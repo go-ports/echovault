@@ -23,8 +23,8 @@ import (
 // captured stdout output along with any execution error.
 // Output is captured via root.SetOut so tests can run concurrently without
 // interfering with each other or with os.Stdout.
-func runCmd(t *testing.T, args ...string) (string, error) {
-	t.Helper()
+func runCmd(tb testing.TB, args ...string) (string, error) {
+	tb.Helper()
 
 	var buf bytes.Buffer
 	root := rootcmd.New()
