@@ -64,17 +64,17 @@ changelog:
 
 release:
   github:
-    owner: go-extras
-    name: qtlint
+    owner: go-ports
+    name: echovault
   header: |
-    ## qtlint {{ .Version }}
+    ## echovault {{ .Version }}
 
-    A Go linter that enforces best practices for quicktest usage.
+    Release of echovault {{ .Version }}.
 
     ### Installation
 
     ```bash
-    go install github.com/go-extras/qtlint/cmd/qtlint@{{ .Tag }}
+    go install github.com/go-ports/echovault/cmd/memory@{{ .Tag }}
     ```
 
 source:
