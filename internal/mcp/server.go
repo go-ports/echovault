@@ -44,6 +44,15 @@ const searchDescription = `Search memories using keyword and semantic search. Re
 
 const contextDescription = `Get memory context for the current project. You MUST call this at session start to load prior decisions, bugs, and context. Do not skip this step — prior sessions contain decisions and context that directly affect your current task. Use memory_search for specific topics.` //nolint:lll
 
+// NewServer creates and registers all memory tools on a new MCP server.
+// It is intentionally separate from Serve so that tests and other callers can
+// obtain a fully configured server without committing to the stdio transport.
+func NewServer(svc *service.Service) *mcpserver.MCPServer {
+	s := mcpserver.NewMCPServer("echovault", buildinfo.Version)
+	registerTools(s, svc)
+	return s
+}
+
 // Serve starts the stdio MCP server, blocking until stdin closes.
 func Serve(_ context.Context) error {
 	svc, err := service.New("")
@@ -52,9 +61,7 @@ func Serve(_ context.Context) error {
 	}
 	defer svc.Close()
 
-	s := mcpserver.NewMCPServer("echovault", buildinfo.Version)
-	registerTools(s, svc)
-	return mcpserver.ServeStdio(s)
+	return mcpserver.ServeStdio(NewServer(svc))
 }
 
 // registerTools wires all three MCP tools into the server.
