@@ -77,22 +77,22 @@ jobs:
 #            echo "Coverage ${COVERAGE}% is below threshold ${COVERAGE_THRESHOLD}%"
 #            exit 1
 #          fi
-
-      - name: Upload coverage to Codecov
-        if: matrix.go-version == needs.setup.outputs.go_version
-        uses: codecov/codecov-action@v5
-        with:
-          files: ./coverage.out
-          flags: unittests
-          name: codecov-umbrella
-          fail_ci_if_error: false
-
-      - name: Upload coverage artifacts
-        if: matrix.go-version == needs.setup.outputs.go_version
-        uses: actions/upload-artifact@v6
-        with:
-          name: coverage-report
-          path: |
-            coverage.out
-            coverage.html
-            coverage.txt
+#
+#      - name: Upload coverage to Codecov
+#        if: matrix.go-version == needs.setup.outputs.go_version
+#        uses: codecov/codecov-action@v5
+#        with:
+#          files: ./coverage.out
+#          flags: unittests
+#          name: codecov-umbrella
+#          fail_ci_if_error: false
+#
+#      - name: Upload coverage artifacts
+#        if: matrix.go-version == needs.setup.outputs.go_version
+#        uses: actions/upload-artifact@v6
+#        with:
+#          name: coverage-report
+#          path: |
+#            coverage.out
+#            coverage.html
+#            coverage.txt
