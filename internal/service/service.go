@@ -253,12 +253,10 @@ func resultsToMaps(results []search.Result) []map[string]any {
 // ---------------------------------------------------------------------------
 
 // Save stores a memory with full pipeline: redact → dedup → markdown → db → embed.
-// project defaults to the current working-directory basename when empty.
+// project is required and must be a non-empty string.
 func (s *Service) Save(ctx context.Context, raw *models.RawMemoryInput, project string) (*models.SaveResult, error) { //nolint:gocognit,gocyclo // complexity is inherent to the dedup, redaction, markdown, db, and embedding pipeline
 	if project == "" {
-		if cwd, err := os.Getwd(); err == nil {
-			project = filepath.Base(cwd)
-		}
+		return nil, fmt.Errorf("Save: project name is required")
 	}
 
 	today := time.Now().UTC().Format("2006-01-02")

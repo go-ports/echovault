@@ -87,6 +87,7 @@ func TestSave_HappyPath(t *testing.T) {
 		"--title", "Use make for builds",
 		"--what", "All builds must go through make targets not go build directly",
 		"--category", "pattern",
+		"--project", "testproject",
 	)
 	c.Assert(err, qt.IsNil)
 	c.Assert(out, qt.Contains, "Saved: Use make for builds")
@@ -102,6 +103,7 @@ func TestSave_FailurePath(t *testing.T) {
 	c.Run("missing required --title flag returns error", func(c *qt.C) {
 		_, err := runCmd(t, "--memory-home", home, "save",
 			"--what", "something happened",
+			"--project", "testproject",
 		)
 		c.Assert(err, qt.IsNotNil)
 	})
@@ -109,6 +111,15 @@ func TestSave_FailurePath(t *testing.T) {
 	c.Run("missing required --what flag returns error", func(c *qt.C) {
 		_, err := runCmd(t, "--memory-home", home, "save",
 			"--title", "some title",
+			"--project", "testproject",
+		)
+		c.Assert(err, qt.IsNotNil)
+	})
+
+	c.Run("missing required --project flag returns error", func(c *qt.C) {
+		_, err := runCmd(t, "--memory-home", home, "save",
+			"--title", "some title",
+			"--what", "something happened",
 		)
 		c.Assert(err, qt.IsNotNil)
 	})
@@ -126,6 +137,7 @@ func TestSearch_HappyPath(t *testing.T) {
 		"--title", "CGO required for sqlite",
 		"--what", "CGO must be enabled for go-sqlite3 and sqlite-vec extensions",
 		"--category", "pattern",
+		"--project", "testproject",
 	)
 	c.Assert(saveErr, qt.IsNil)
 
@@ -166,6 +178,7 @@ func TestDelete_HappyPath(t *testing.T) {
 	saveOut, saveErr := runCmd(t, "--memory-home", home, "save",
 		"--title", "Temporary architectural decision",
 		"--what", "Made a temporary architectural decision to revisit later",
+		"--project", "testproject",
 	)
 	c.Assert(saveErr, qt.IsNil)
 
@@ -209,6 +222,7 @@ func TestDetails_HappyPath(t *testing.T) {
 		"--title", "Architecture decision",
 		"--what", "Chose SQLite for local persistent storage",
 		"--details", "context: needed an embedded database\noptions considered: SQLite, BoltDB\ndecision: chose SQLite\ntradeoffs: requires CGO compilation\nfollow-up: revisit if CGO becomes a blocker",
+		"--project", "testproject",
 	)
 	c.Assert(saveErr, qt.IsNil)
 
@@ -227,6 +241,7 @@ func TestDetails_NoDetails_HappyPath(t *testing.T) {
 	saveOut, saveErr := runCmd(t, "--memory-home", home, "save",
 		"--title", "Quick note",
 		"--what", "A quick note without any extended details attached",
+		"--project", "testproject",
 	)
 	c.Assert(saveErr, qt.IsNil)
 
@@ -250,6 +265,7 @@ func TestContext_HappyPath(t *testing.T) {
 		"--title", "Context injection pattern",
 		"--what", "Run memory context at the start of every coding agent session",
 		"--category", "pattern",
+		"--project", "testproject",
 	)
 	c.Assert(saveErr, qt.IsNil)
 

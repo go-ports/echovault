@@ -66,10 +66,11 @@ func New(ctx *shared.Context) *Command {
 	f.StringVar(&c.detailsFile, "details-file", "", "Path to a file containing extended details")
 	f.BoolVar(&c.detailsTemplate, "details-template", false, "Use a structured details template")
 	f.StringVar(&c.source, "source", "", "Source of the memory (e.g. claude-code)")
-	f.StringVar(&c.project, "project", "", "Project name (default: current directory name)")
+	f.StringVar(&c.project, "project", "", "Project name (required)")
 
 	_ = c.cmd.MarkFlagRequired("title")
 	_ = c.cmd.MarkFlagRequired("what")
+	_ = c.cmd.MarkFlagRequired("project")
 
 	return c
 }
