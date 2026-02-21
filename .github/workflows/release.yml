@@ -133,3 +133,15 @@ jobs:
         run: .\memory.exe --help
         shell: pwsh
 
+  test-windows-arm64:
+    name: Smoke test (windows/arm64)
+    needs: goreleaser
+    runs-on: windows-11-arm
+    steps:
+      - name: Download windows/arm64 binary
+        uses: actions/download-artifact@v4
+        with:
+          name: memory-windows-arm64
+      - name: Run
+        run: .\memory.exe --help
+        shell: pwsh
