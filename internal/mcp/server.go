@@ -6,8 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
-	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -132,7 +130,8 @@ func registerTools(s *mcpserver.MCPServer, svc *service.Service, disabledTools [
 				mcp.Description("Full context for a future agent with zero context. Prefer: Context, Options considered, Decision, Tradeoffs, Follow-up."),
 			),
 			mcp.WithString("project",
-				mcp.Description("Project name. Auto-detected from cwd if omitted."),
+				mcp.Description("Project name (required)."),
+				mcp.Required(),
 			),
 		), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			return handleSave(ctx, svc, req)
@@ -161,7 +160,8 @@ func registerTools(s *mcpserver.MCPServer, svc *service.Service, disabledTools [
 		s.AddTool(mcp.NewTool("memory_context",
 			mcp.WithDescription(contextDescription),
 			mcp.WithString("project",
-				mcp.Description("Project name. Auto-detected from cwd if omitted."),
+				mcp.Description("Project name (required)."),
+				mcp.Required(),
 			),
 			mcp.WithNumber("limit",
 				mcp.Description("Max memories (default 10)"),
@@ -230,7 +230,7 @@ func registerTools(s *mcpserver.MCPServer, svc *service.Service, disabledTools [
 				mcp.Description("Full context for a future agent with zero context."),
 			),
 			mcp.WithString("project",
-				mcp.Description("Project name. Auto-detected from cwd if omitted."),
+				mcp.Description("Project name."),
 			),
 		), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			return handleReplace(ctx, svc, req)
@@ -245,9 +245,7 @@ func registerTools(s *mcpserver.MCPServer, svc *service.Service, disabledTools [
 func handleSave(ctx context.Context, svc *service.Service, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	project := req.GetString("project", "")
 	if project == "" {
-		if cwd, err := os.Getwd(); err == nil {
-			project = filepath.Base(cwd)
-		}
+		return mcp.NewToolResultError("'project' is required"), nil
 	}
 
 	category := req.GetString("category", "")
@@ -314,9 +312,7 @@ func handleSearch(ctx context.Context, svc *service.Service, req mcp.CallToolReq
 func handleContext(ctx context.Context, svc *service.Service, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	project := req.GetString("project", "")
 	if project == "" {
-		if cwd, err := os.Getwd(); err == nil {
-			project = filepath.Base(cwd)
-		}
+		return mcp.NewToolResultError("'project' is required"), nil
 	}
 	limit := req.GetInt("limit", 10)
 	if limit <= 0 {
@@ -343,7 +339,7 @@ func handleContext(ctx context.Context, svc *service.Service, req mcp.CallToolRe
 
 	message := "Use memory_search for specific topics. IMPORTANT: You MUST call memory_save before this session ends if you make any changes, decisions, or discoveries."
 	if total == 0 {
-		message += " No memories found for project \"" + project + "\". If this is unexpected, retry with an explicit project name (e.g. memory_context(project: \"myproject\"))."
+		message += " No memories found for project \"" + project + "\"."
 	}
 
 	return jsonResult(map[string]any{

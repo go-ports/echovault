@@ -152,9 +152,9 @@ func TestMCPMemorySave_HappyPath(t *testing.T) {
 
 func TestMCPMemorySave_FailurePath(t *testing.T) {
 	c := qt.New(t)
-	cl := newMCPClient(c)
 
 	c.Run("invalid category falls back to context without error", func(c *qt.C) {
+		cl := newMCPClient(c)
 		text := callTool(c, cl, "memory_save", map[string]any{
 			"title":    "category fallback test",
 			"what":     "testing that an unrecognised category defaults to context",
@@ -162,6 +162,21 @@ func TestMCPMemorySave_FailurePath(t *testing.T) {
 			"project":  "echovault",
 		})
 		c.Assert(text, checkers.JSONPathEquals("$.action"), "created")
+	})
+
+	c.Run("missing project returns error", func(c *qt.C) {
+		cl := newMCPClient(c)
+
+		req := mcp.CallToolRequest{}
+		req.Params.Name = "memory_save"
+		req.Params.Arguments = map[string]any{
+			"title": "no project memory",
+			"what":  "saved without a project name",
+		}
+
+		result, err := cl.CallTool(context.Background(), req)
+		c.Assert(err, qt.IsNil)
+		c.Assert(result.IsError, qt.IsTrue)
 	})
 }
 
@@ -240,6 +255,22 @@ func TestMCPMemoryContext_EmptyVault_HappyPath(t *testing.T) {
 	})
 
 	c.Assert(text, checkers.JSONPathEquals("$.total"), float64(0))
+}
+
+func TestMCPMemoryContext_FailurePath(t *testing.T) {
+	c := qt.New(t)
+
+	c.Run("missing project returns error", func(c *qt.C) {
+		cl := newMCPClient(c)
+
+		req := mcp.CallToolRequest{}
+		req.Params.Name = "memory_context"
+		req.Params.Arguments = make(map[string]any)
+
+		result, err := cl.CallTool(context.Background(), req)
+		c.Assert(err, qt.IsNil)
+		c.Assert(result.IsError, qt.IsTrue)
+	})
 }
 
 // ---------------------------------------------------------------------------

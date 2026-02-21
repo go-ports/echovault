@@ -31,6 +31,7 @@ func TestCLISaveWithEmbedding_HappyPath(t *testing.T) {
 				"--title", "Embedding pipeline test",
 				"--what", "Testing the embedding pipeline with "+tc.provider,
 				"--category", "pattern",
+				"--project", "testproject",
 			)
 			c.Assert(err, qt.IsNil)
 			c.Assert(out, qt.Contains, "Saved: Embedding pipeline test")
@@ -57,6 +58,7 @@ func TestCLISearchWithEmbedding_HappyPath(t *testing.T) {
 				"--title", "Vector search test",
 				"--what", "Verifying vector search with "+tc.provider,
 				"--category", "learning",
+				"--project", "testproject",
 			)
 			c.Assert(saveErr, qt.IsNil)
 
