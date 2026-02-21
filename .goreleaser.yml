@@ -18,27 +18,65 @@ builds:
     goarch:
       - amd64
       - arm64
+      - arm
+    goarm:
+      - '6'
+      - '7'
     ignore:
-      # No widely-available cross-compiler for Windows arm64.
+      # macOS does not support 32-bit ARM.
+      - goos: darwin
+        goarch: arm
+      # 32-bit ARM Windows is effectively obsolete; deprecated in Go 1.25.
       - goos: windows
-        goarch: arm64
+        goarch: arm
     overrides:
-      # Windows cross-compilation from Linux requires MinGW.
-      - goos: windows
+      # Linux targets are cross-compiled via zig (musl libc for portability).
+      - goos: linux
         goarch: amd64
         env:
           - CGO_ENABLED=1
           - CGO_CFLAGS=-DSQLITE_ENABLE_FTS5
-          - CC=x86_64-w64-mingw32-gcc
-          - CXX=x86_64-w64-mingw32-g++
-      # Linux arm64 cross-compilation from amd64.
+          - CC=zig-cc-x86_64-linux-musl
+          - CXX=zig-cxx-x86_64-linux-musl
       - goos: linux
         goarch: arm64
         env:
           - CGO_ENABLED=1
           - CGO_CFLAGS=-DSQLITE_ENABLE_FTS5
-          - CC=aarch64-linux-gnu-gcc
-          - CXX=aarch64-linux-gnu-g++
+          - CC=zig-cc-aarch64-linux-musl
+          - CXX=zig-cxx-aarch64-linux-musl
+      - goos: linux
+        goarch: arm
+        goarm: '6'
+        env:
+          - CGO_ENABLED=1
+          - CGO_CFLAGS=-DSQLITE_ENABLE_FTS5
+          - CC=zig-cc-arm-linux-musleabi
+          - CXX=zig-cxx-arm-linux-musleabi
+      - goos: linux
+        goarch: arm
+        goarm: '7'
+        env:
+          - CGO_ENABLED=1
+          - CGO_CFLAGS=-DSQLITE_ENABLE_FTS5
+          - CC=zig-cc-arm-linux-musleabihf
+          - CXX=zig-cxx-arm-linux-musleabihf
+      # Windows targets are cross-compiled via zig.
+      - goos: windows
+        goarch: amd64
+        env:
+          - CGO_ENABLED=1
+          - CGO_CFLAGS=-DSQLITE_ENABLE_FTS5
+          - CC=zig-cc-x86_64-windows-gnu
+          - CXX=zig-cxx-x86_64-windows-gnu
+      - goos: windows
+        goarch: arm64
+        env:
+          - CGO_ENABLED=1
+          - CGO_CFLAGS=-DSQLITE_ENABLE_FTS5
+          - CC=zig-cc-aarch64-windows-gnu
+          - CXX=zig-cxx-aarch64-windows-gnu
+      # darwin targets use native Xcode clang — no CC override needed.
 
 archives:
   - formats: [ 'tar.gz' ]
