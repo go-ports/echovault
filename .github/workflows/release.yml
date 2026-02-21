@@ -13,11 +13,28 @@ permissions:
   packages: write
 
 jobs:
-  goreleaser:
-    name: GoReleaser
-    runs-on: ubuntu-latest
+  # Build each OS on its native (or appropriate cross-compile) runner.
+  # darwin  → macos-latest   (native CGO, no SDK needed)
+  # linux   → ubuntu-latest  (native + aarch64 cross-compiler)
+  # windows → ubuntu-latest  (MinGW cross-compiler)
+  goreleaser-build:
+    name: Build (${{ matrix.ggoos }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            ggoos: linux
+          - runner: ubuntu-latest
+            ggoos: windows
+          - runner: macos-latest
+            ggoos: darwin
+    runs-on: ${{ matrix.runner }}
+    env:
+      CGO_ENABLED: "1"
+      CGO_CFLAGS: "-DSQLITE_ENABLE_FTS5"
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
@@ -29,7 +46,19 @@ jobs:
           cache: true
           cache-dependency-path: go.sum
 
-      - name: Run GoReleaser (Snapshot for PRs)
+      - name: Install Linux cross-compilers
+        if: matrix.ggoos == 'linux'
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+
+      - name: Install MinGW (Windows cross-compilation)
+        if: matrix.ggoos == 'windows'
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y gcc-mingw-w64-x86-64 g++-mingw-w64-x86-64
+
+      - name: Run GoReleaser (snapshot — PR)
         if: github.event_name == 'pull_request'
         uses: goreleaser/goreleaser-action@v6
         with:
@@ -38,25 +67,68 @@ jobs:
           args: release --snapshot --clean --skip=publish
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GGOOS: ${{ matrix.ggoos }}
 
-      - name: Upload PR artifacts
+      - name: Upload snapshot artifacts (PR)
         if: github.event_name == 'pull_request'
         uses: actions/upload-artifact@v6
         with:
-          name: release-artifacts
+          name: snapshot-${{ matrix.ggoos }}
           path: |
             dist/*.tar.gz
             dist/*.zip
             dist/checksums.txt
           retention-days: 7
 
-      - name: Run GoReleaser (Production Release)
+      - name: Run GoReleaser (split — tag)
         if: startsWith(github.ref, 'refs/tags/')
         uses: goreleaser/goreleaser-action@v6
         with:
           distribution: goreleaser
           version: '~> v2'
-          args: release --clean
+          args: release --split --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GGOOS: ${{ matrix.ggoos }}
+
+      - name: Upload dist for merge (tag)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: actions/upload-artifact@v6
+        with:
+          name: dist-${{ matrix.ggoos }}
+          path: dist/
+          retention-days: 1
+
+  # Merge the per-OS split artifacts into a single GitHub Release.
+  goreleaser-merge:
+    name: Merge & Publish
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: goreleaser-build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: 1.26.0
+
+      - name: Download dist artifacts
+        uses: actions/download-artifact@v6
+        with:
+          pattern: dist-*
+          path: dist
+          merge-multiple: true
+
+      - name: Run GoReleaser (merge)
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: '~> v2'
+          args: continue --merge
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

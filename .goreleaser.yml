@@ -10,26 +10,35 @@ builds:
     ldflags: -s -w -X main.version={{.Version}} -X main.commit={{.ShortCommit}} -X main.date={{.Date}}
     env:
       - CGO_ENABLED=1
+      - CGO_CFLAGS=-DSQLITE_ENABLE_FTS5
     goos:
+      - linux
       - darwin
       - windows
-      - linux
-      - freebsd
     goarch:
       - amd64
       - arm64
-      - arm
-      - '386'
-    goarm:
-      - '6'
-      - '7'
     ignore:
-      - goos: darwin
-        goarch: '386'
-      # Deprecated in go1.25, Removed in go1.26
-      # https://go.dev/doc/go1.25#windows
+      # No widely-available cross-compiler for Windows arm64.
       - goos: windows
-        goarch: arm
+        goarch: arm64
+    overrides:
+      # Windows cross-compilation from Linux requires MinGW.
+      - goos: windows
+        goarch: amd64
+        env:
+          - CGO_ENABLED=1
+          - CGO_CFLAGS=-DSQLITE_ENABLE_FTS5
+          - CC=x86_64-w64-mingw32-gcc
+          - CXX=x86_64-w64-mingw32-g++
+      # Linux arm64 cross-compilation from amd64.
+      - goos: linux
+        goarch: arm64
+        env:
+          - CGO_ENABLED=1
+          - CGO_CFLAGS=-DSQLITE_ENABLE_FTS5
+          - CC=aarch64-linux-gnu-gcc
+          - CXX=aarch64-linux-gnu-g++
 
 archives:
   - formats: [ 'tar.gz' ]
