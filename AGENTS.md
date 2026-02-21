@@ -437,6 +437,8 @@ All tests MUST be purely declarative. The following are **prohibited** in test f
 
 `for` loops are allowed for table-driven tests (iterating over a static list of cases). Keep loop bodies simple and avoid using loops to encode branching logic.
 
+**Exception — end-to-end tests**: Tests in `tests/e2e` are exempt from the declarative-only rule. Conditionals (`if`, `switch`) are permitted in e2e tests where necessary to handle environment variance, process orchestration, or multi-step flows that cannot be expressed declaratively.
+
 **Go 1.22+ note**: range variables are per-iteration, so the historical `tt := tt` workaround is not needed when using `c.Run()`/closures.
 
 ### Do not hide conditionals in helper functions
@@ -479,6 +481,10 @@ func TestOpen_FailurePath(t *testing.T) {
     })
 }
 ```
+
+### End-to-End Tests
+
+All e2e tests MUST be placed in `tests/e2e`. They exercise the full stack by loading the root Cobra command directly (without spawning a subprocess), driving it through its CLI interface as if it were the compiled binary. As noted above, conditionals are permitted in e2e tests.
 
 ### Black-Box Testing (Default)
 
