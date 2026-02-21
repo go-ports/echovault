@@ -64,7 +64,7 @@ jobs:
         with:
           distribution: goreleaser
           version: '~> v2'
-          args: release --snapshot --clean --skip=publish
+          args: release --snapshot --split --clean --skip=publish
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GGOOS: ${{ matrix.ggoos }}
@@ -74,10 +74,7 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: snapshot-${{ matrix.ggoos }}
-          path: |
-            dist/*.tar.gz
-            dist/*.zip
-            dist/checksums.txt
+          path: dist/
           retention-days: 7
 
       - name: Run GoReleaser (split — tag)
