@@ -18,6 +18,9 @@ jobs:
   build:
     name: Build
     runs-on: ubuntu-latest
+    env:
+      # Required to compile go-sqlite3 with FTS5 support.
+      CGO_CFLAGS: "-DSQLITE_ENABLE_FTS5"
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -41,6 +44,9 @@ jobs:
   unit-tests:
     name: Unit Tests
     runs-on: ubuntu-latest
+    env:
+      # Required to compile go-sqlite3 with FTS5 support.
+      CGO_CFLAGS: "-DSQLITE_ENABLE_FTS5"
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
