@@ -14,7 +14,11 @@ builds:
     main: ./cmd/memory/
     flags:
       - -trimpath
-    ldflags: -s -w -X main.version={{.Version}} -X main.commit={{.ShortCommit}} -X main.date={{.Date}}
+    ldflags: >-
+      -s -w
+      -X github.com/go-ports/echovault/internal/buildinfo.Version={{.Version}}
+      -X github.com/go-ports/echovault/internal/buildinfo.GitCommit={{.ShortCommit}}
+      -X github.com/go-ports/echovault/internal/buildinfo.BuildDate={{.Date}}
     env:
       - CGO_ENABLED=1
       # darwin: export SDKROOT so the linker can find system frameworks.

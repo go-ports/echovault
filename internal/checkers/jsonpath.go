@@ -67,13 +67,13 @@ func (c *jsonPathMatchesChecker) Check(got any, args []any, note func(key string
 
 	jsonPathVal, err := jsonpath.Read(got, c.jsonPath)
 
-	if isNil(jsonPathVal) && isNil(args[0]) {
-		return nil
-	}
-
 	if err != nil {
 		notes()
 		return fmt.Errorf("failed to evaluate JSON path expression: %w", err)
+	}
+
+	if isNil(jsonPathVal) && isNil(args[0]) {
+		return nil
 	}
 
 	err = c.checker.Check(jsonPathVal, args, note)

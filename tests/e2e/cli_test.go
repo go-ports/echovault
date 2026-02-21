@@ -1,8 +1,7 @@
 // Package e2e_test contains end-to-end tests that exercise the full memory CLI
 // by importing the root command and running it in-process with a temporary vault.
-//
-// These tests must NOT run in parallel: stdout is temporarily redirected via
-// os.Pipe to capture fmt.Printf output and that replacement is process-global.
+// Output is captured via cobra's SetOut so tests can run concurrently without
+// affecting os.Stdout.
 package e2e_test
 
 import (

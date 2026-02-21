@@ -197,6 +197,9 @@ func toResults(rows []map[string]any) []Result {
 }
 
 func clamp(limit, n int) int {
+	if limit <= 0 {
+		return n
+	}
 	if limit < n {
 		return limit
 	}

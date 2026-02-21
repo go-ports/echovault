@@ -28,11 +28,15 @@ func NewProvider(cfg *config.MemoryConfig) (Provider, error) {
 		return NewOllama(cfg.Embedding.Model, baseURL), nil
 
 	case "openai":
-		return NewOpenAI(cfg.Embedding.Model, cfg.Embedding.APIKey, ""), nil
+		return NewOpenAI(cfg.Embedding.Model, cfg.Embedding.APIKey, cfg.Embedding.BaseURL), nil
 
 	case "openrouter":
 		const openRouterBase = "https://openrouter.ai/api/v1"
-		return NewOpenAI(cfg.Embedding.Model, cfg.Embedding.APIKey, openRouterBase), nil
+		baseURL := cfg.Embedding.BaseURL
+		if baseURL == "" {
+			baseURL = openRouterBase
+		}
+		return NewOpenAI(cfg.Embedding.Model, cfg.Embedding.APIKey, baseURL), nil
 
 	case "", "none":
 		return nil, nil

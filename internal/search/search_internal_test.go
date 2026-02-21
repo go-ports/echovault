@@ -143,7 +143,8 @@ func TestClamp_HappyPath(t *testing.T) {
 		{"limit less than n", 3, 5, 3},
 		{"limit equal to n", 5, 5, 5},
 		{"limit greater than n", 7, 5, 5},
-		{"limit zero", 0, 5, 0},
+		{"limit zero (no limit)", 0, 5, 5},
+		{"limit negative (no limit)", -1, 5, 5},
 	}
 
 	for _, tc := range cases {

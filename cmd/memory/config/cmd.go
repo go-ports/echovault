@@ -19,9 +19,9 @@ const configTemplate = `# EchoVault configuration
 # Embedding provider for semantic search.
 # Without this, keyword search (FTS5) still works.
 embedding:
-  provider: ollama              # ollama | openai
+  provider: ollama              # ollama | openai | openrouter
   model: nomic-embed-text
-  # api_key: sk-...            # required for openai
+  # api_key: sk-...            # required for openai/openrouter
 
 # How memories are retrieved at session start.
 # "auto" uses vectors when available, falls back to keywords.

@@ -86,9 +86,6 @@ embedding:
   provider: ollama              # ollama | openai | openrouter
   model: nomic-embed-text
 
-enrichment:
-  provider: none                # none | ollama | openai | openrouter
-
 context:
   semantic: auto                # auto | always | never
   topup_recent: true
@@ -97,7 +94,6 @@ context:
 **What each section does:**
 
 - **`embedding`** — How memories get turned into vectors for semantic search. `ollama` runs locally; `openai` and `openrouter` call cloud APIs. `nomic-embed-text` is a good local model for Ollama.
-- **`enrichment`** — Optional LLM step that enhances memories before storing (better summaries, auto-tags). Set to `none` to skip.
 - **`context`** — Controls how memories are retrieved at session start. `auto` uses vector search when embeddings are available, falls back to keywords. `topup_recent` also includes recent memories so the agent has fresh context.
 
 For cloud providers, add `api_key` under the provider section. API keys are redacted in `memory config` output.

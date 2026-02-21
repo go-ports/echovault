@@ -129,7 +129,9 @@ func sectionAnchor(title string) string {
 // newUUID generates a random UUID v4 using crypto/rand without external deps.
 func newUUID() string {
 	var b [16]byte
-	_, _ = rand.Read(b[:])
+	if _, err := rand.Read(b[:]); err != nil {
+		panic("echovault: crypto/rand unavailable: " + err.Error())
+	}
 	// Set version 4 and variant bits (RFC 4122).
 	b[6] = (b[6] & 0x0f) | 0x40
 	b[8] = (b[8] & 0x3f) | 0x80

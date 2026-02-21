@@ -182,11 +182,11 @@ func updateFrontmatter(frontmatter string, mem *models.Memory) string { //nolint
 // ---------------------------------------------------------------------------
 
 func insertSectionInBody(body string, mem *models.Memory, sectionContent string) string {
-	if mem.Category == "" {
+	heading := models.CategoryHeadings[mem.Category]
+	if mem.Category == "" || heading == "" {
 		return strings.TrimRight(body, "\n") + "\n\n" + sectionContent + "\n"
 	}
 
-	heading := models.CategoryHeadings[mem.Category]
 	h2marker := "## " + heading
 
 	if strings.Contains(body, h2marker) {

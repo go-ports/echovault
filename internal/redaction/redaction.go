@@ -61,7 +61,7 @@ func Redact(text string, extraPatterns []*regexp.Regexp) string {
 
 // LoadMemoryIgnore reads a .memoryignore file and compiles each non-blank,
 // non-comment line as a regular expression.
-// Returns an empty slice (no error) if the file does not exist.
+// Returns nil (no error) if the file does not exist.
 func LoadMemoryIgnore(path string) ([]*regexp.Regexp, error) {
 	f, err := os.Open(path)
 	if os.IsNotExist(err) {
