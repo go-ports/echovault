@@ -26,11 +26,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
+# Create a non-root user and application data directory
+RUN useradd -m -u 1000 -s /usr/sbin/nologin memory \
+    && mkdir -p /app/.memory \
+    && chown -R memory:memory /app
+
+WORKDIR /app
+
 COPY --from=builder /bin/memory /usr/local/bin/memory
 
 # Default memory home inside the container; mount a host path here for persistence.
-ENV MEMORY_HOME=/root/.memory
+ENV MEMORY_HOME=/app/.memory
 
-VOLUME ["/root/.memory"]
+VOLUME ["/app/.memory"]
 
+# Run the application as a non-root user
+USER memory
 ENTRYPOINT ["memory", "mcp"]
