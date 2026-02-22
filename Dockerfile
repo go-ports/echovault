@@ -1,5 +1,5 @@
 # Build stage — requires CGO for go-sqlite3 (FTS5) and sqlite-vec
-FROM golang:1.26.0-bookworm AS builder
+FROM golang:1.26-bookworm AS builder
 
 ARG VERSION=dev
 
