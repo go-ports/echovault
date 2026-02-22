@@ -21,7 +21,7 @@
           "description": "Directory where memories are stored. Ensure this path is mounted to persistent storage for data retention across container restarts.",
           "isRequired": false,
           "format": "filepath",
-          "default": "/root/.memory"
+          "default": "/app/.memory"
         }
       ]
     }
