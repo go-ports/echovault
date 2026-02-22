@@ -22,6 +22,9 @@ RUN CGO_ENABLED=1 CGO_CFLAGS="-DSQLITE_ENABLE_FTS5" \
 # Runtime stage — same distro as builder to ensure glibc compatibility
 FROM debian:bookworm-slim
 
+# Required by MCP Registry: associate this image with the published server name
+LABEL io.modelcontextprotocol.server.name="io.github.go-ports/echovault"
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*

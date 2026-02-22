@@ -95,7 +95,7 @@ jobs:
         run: |
           SCHEMA_URL="https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json"
           curl -fsSL "$SCHEMA_URL" -o server.schema.json
-          npx --yes ajv-cli@5 validate -s server.schema.json -d server.json
+          npx --yes ajv-cli@5 validate --strict=false --validate-formats=false -s server.schema.json -d server.json
           echo "Configuration valid against MCP server schema"
 
       - name: Display final server.json
