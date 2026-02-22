@@ -1,0 +1,7 @@
+.git
+.github
+tests
+*.md
+.golangci.yml
+.goreleaser.yml
+assets
