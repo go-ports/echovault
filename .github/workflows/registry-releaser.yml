@@ -1,0 +1,122 @@
+name: Publish to MCP Registry
+
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write  # Required for OIDC authentication
+      contents: read
+      packages: read  # Required to inspect/pull Docker images from ghcr.io
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: "stable"
+
+      - name: Fetch tags
+        run: |
+          if [[ "${{ github.ref_type }}" != "tag" ]]; then
+            git fetch --tags
+          else
+            echo "Skipping tag fetch - already on tag ${{ github.ref_name }}"
+          fi
+
+      - name: Resolve version tag
+        id: version
+        run: |
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            TAG="${{ github.ref_name }}"
+            if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "Resolved tag '$TAG' does not match expected format 'vMAJOR.MINOR.PATCH' (for example: v1.2.3)."
+              echo "This tag is used as the Docker image tag: ghcr.io/go-ports/echovault:<tag>."
+              exit 1
+            fi
+          else
+            TAG=$(git tag --sort=-version:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n1)
+            if [ -z "$TAG" ]; then
+              echo "No release tag found matching expected format 'vMAJOR.MINOR.PATCH' (for example: v1.2.3)."
+              echo "The Docker image is expected to be tagged as: ghcr.io/go-ports/echovault:<tag>."
+              exit 1
+            fi
+            echo "Using latest tag: $TAG"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$(echo "$TAG" | sed 's/^v//')" >> "$GITHUB_OUTPUT"
+
+      - name: Log into ghcr.io
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Wait for Docker image
+        run: |
+          IMAGE="ghcr.io/go-ports/echovault:${{ steps.version.outputs.tag }}"
+          MAX_ATTEMPTS=40
+          SLEEP_SECONDS=30
+          TOTAL_WAIT_MINUTES=$((MAX_ATTEMPTS * SLEEP_SECONDS / 60))
+          for i in $(seq 1 "$MAX_ATTEMPTS"); do
+            if docker manifest inspect "$IMAGE" &>/dev/null; then
+              echo "✅ Docker image ready: $IMAGE"
+              break
+            fi
+            if [ "$i" -eq "$MAX_ATTEMPTS" ]; then
+              echo "❌ Timeout waiting for $IMAGE after ${TOTAL_WAIT_MINUTES} minutes. The image may still be building; please verify the Docker publish workflow completed successfully."
+              exit 1
+            fi
+            echo "⏳ Waiting for Docker image ($i/$MAX_ATTEMPTS)..."
+            sleep "$SLEEP_SECONDS"
+          done
+
+      - name: Install MCP Publisher
+        run: |
+          git clone --quiet https://github.com/modelcontextprotocol/registry publisher-repo
+          cd publisher-repo && make publisher && cd ..
+          cp publisher-repo/bin/mcp-publisher . && chmod +x mcp-publisher
+          rm -rf publisher-repo
+
+      - name: Update server.json version
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          sed -i "s|\${VERSION}|$VERSION|g" server.json
+          echo "Version: $VERSION"
+
+      - name: Validate configuration
+        run: |
+          SCHEMA_URL="https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json"
+          curl -fsSL "$SCHEMA_URL" -o server.schema.json
+          npx --yes ajv-cli@5 validate -s server.schema.json -d server.json
+          echo "Configuration valid against MCP server schema"
+
+      - name: Display final server.json
+        run: |
+          echo "Final server.json contents:"
+          cat server.json
+
+      - name: Login to MCP Registry (OIDC)
+        run: |
+          echo "Logging in to MCP Registry using GitHub OIDC..."
+          if ! ./mcp-publisher login github-oidc; then
+            echo "❌ MCP Registry login failed. Check OIDC configuration, repository permissions, and network connectivity." >&2
+            exit 1
+          fi
+          echo "✅ MCP Registry login succeeded."
+
+      - name: Publish to MCP Registry
+        run: |
+          echo "Publishing to MCP Registry..."
+          if ! ./mcp-publisher publish; then
+            echo "❌ Failed to publish to MCP Registry. Ensure the login step completed successfully and that your registry credentials and configuration are valid." >&2
+            exit 1
+          fi
+          echo "✅ Successfully published to MCP Registry."
