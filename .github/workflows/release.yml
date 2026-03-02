@@ -109,7 +109,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download linux/amd64 binary
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: memory-linux-amd64
       - name: Run
@@ -121,7 +121,7 @@ jobs:
     runs-on: ubuntu-24.04-arm
     steps:
       - name: Download linux/arm64 binary
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: memory-linux-arm64
       - name: Run
@@ -133,7 +133,7 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Download windows/amd64 binary
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: memory-windows-amd64
       - name: Run
@@ -146,7 +146,7 @@ jobs:
     runs-on: windows-11-arm
     steps:
       - name: Download windows/arm64 binary
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: memory-windows-arm64
       - name: Run
