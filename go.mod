@@ -5,7 +5,7 @@ go 1.26.0
 require (
 	github.com/asg017/sqlite-vec-go-bindings v0.1.6
 	github.com/frankban/quicktest v1.14.6
-	github.com/mark3labs/mcp-go v0.44.0
+	github.com/mark3labs/mcp-go v0.44.1
 	github.com/mattn/go-sqlite3 v1.14.34
 	github.com/spf13/cobra v1.10.2
 	github.com/yalp/jsonpath v0.0.0-20180802001716-5cc68e5049a0
