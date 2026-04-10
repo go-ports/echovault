@@ -3,7 +3,6 @@ package setup_test
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
@@ -226,11 +225,11 @@ func TestUninstallCodex_HappyPath(t *testing.T) {
 
 		agentsData, err := os.ReadFile(filepath.Join(tmp, "AGENTS.md"))
 		c.Assert(err, qt.IsNil)
-		c.Assert(strings.Contains(string(agentsData), "## EchoVault"), qt.IsFalse)
+		c.Assert(string(agentsData), qt.Not(qt.Contains), "## EchoVault")
 
 		tomlData, err := os.ReadFile(filepath.Join(tmp, "config.toml"))
 		c.Assert(err, qt.IsNil)
-		c.Assert(strings.Contains(string(tomlData), "mcp_servers.echovault"), qt.IsFalse)
+		c.Assert(string(tomlData), qt.Not(qt.Contains), "mcp_servers.echovault")
 	})
 
 	c.Run("nothing to remove when not installed", func(c *qt.C) {
@@ -263,6 +262,6 @@ func TestUninstallCodex_HappyPath(t *testing.T) {
 		data, err := os.ReadFile(agentsPath)
 		c.Assert(err, qt.IsNil)
 		c.Assert(string(data), qt.Contains, "Keep This")
-		c.Assert(strings.Contains(string(data), "## EchoVault"), qt.IsFalse)
+		c.Assert(string(data), qt.Not(qt.Contains), "## EchoVault")
 	})
 }
